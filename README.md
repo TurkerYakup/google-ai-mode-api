@@ -152,10 +152,10 @@ handle one:
 
 | HTTP | `code` | What happened | What to do |
 |---|---|---|---|
-| `400` | `bad_request` | Batch larger than `GAM_MAX_BATCH_SIZE`, or no `user` message in a chat request | Fix the request |
+| `400` | `bad_request` | No non-empty `user` message in a chat request, or a batch above `GAM_MAX_BATCH_SIZE` when you set that below 50 | Fix the request |
 | `401` | `unauthorized` | Missing or wrong `X-API-Key` | Send the key set in `GAM_API_KEY` |
 | `404` | `not_found` | Unknown `task_id`, or debug endpoints disabled | Task results expire after `GAM_TASK_RETENTION`; for debug set `GAM_DEBUG_ENDPOINTS=true` |
-| `422` | `validation_error` | Body or query parameters failed validation | `detail` carries the field-level errors |
+| `422` | `validation_error` | Body or query parameters failed validation — empty `query`, unknown `device`, more than 50 items in a batch | `detail` carries the field-level errors |
 | `500` | `internal_error` | Unexpected failure | Check `docker compose logs` |
 | `502` | `no_answer` | The page loaded but no AI Mode answer was found | Google skips the AI answer for some queries. If it happens for every query, Google's DOM likely changed — see `extracted_by` and `GAM_ANSWER_SELECTORS` |
 | `502` | `extract_failed` | The extraction script threw inside the page | Usually a DOM change; open an issue with the query |

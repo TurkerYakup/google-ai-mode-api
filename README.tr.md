@@ -153,10 +153,10 @@ yeterli:
 
 | HTTP | `code` | Ne oldu | Ne yapmalı |
 |---|---|---|---|
-| `400` | `bad_request` | Toplu istek `GAM_MAX_BATCH_SIZE`'ı aştı ya da sohbet isteğinde `user` mesajı yok | İsteği düzeltin |
+| `400` | `bad_request` | Sohbet isteğinde boş olmayan `user` mesajı yok ya da `GAM_MAX_BATCH_SIZE`'ı 50'nin altına çekmişseniz onu aşan toplu istek | İsteği düzeltin |
 | `401` | `unauthorized` | `X-API-Key` eksik veya yanlış | `GAM_API_KEY`'deki anahtarı gönderin |
 | `404` | `not_found` | Bilinmeyen `task_id` ya da debug uçları kapalı | Görev sonuçları `GAM_TASK_RETENTION` sonrası silinir; debug için `GAM_DEBUG_ENDPOINTS=true` |
-| `422` | `validation_error` | Gövde veya parametreler doğrulamadan geçmedi | `detail` alanı alan bazında hataları taşır |
+| `422` | `validation_error` | Gövde veya parametreler doğrulamadan geçmedi — boş `query`, tanımsız `device`, 50'den fazla maddelik toplu istek | `detail` alanı alan bazında hataları taşır |
 | `500` | `internal_error` | Beklenmeyen hata | `docker compose logs` |
 | `502` | `no_answer` | Sayfa açıldı ama AI Mode cevabı bulunamadı | Google bazı sorgularda yapay zekâ cevabı üretmez. Her sorguda oluyorsa DOM değişmiştir — `extracted_by` ve `GAM_ANSWER_SELECTORS`'a bakın |
 | `502` | `extract_failed` | Ayıklama betiği sayfa içinde hata verdi | Genelde DOM değişikliği; sorguyla birlikte issue açın |
