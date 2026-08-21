@@ -23,11 +23,21 @@ dogrulamis olursunuz.
 3. DevTools konsolunda:
 
 ```js
-// Script/stil/iframe'leri atar: teste gereksiz, ayrica oturum kimligi tasiyabilirler.
+// Script/stil/iframe'leri atar (teste gereksiz, oturum kimligi tasiyabilirler) ve
+// Google'in sayfaya gomdugu API anahtarlarini temizler. Sayfada data-api="AIza..."
+// gibi gercek anahtar dizileri bulunuyor; Google'in kendi public key'i olsa da
+// herkese acik bir depoda durmasi secret tarayicilarini tetikler.
 const d = document.documentElement.cloneNode(true);
 d.querySelectorAll('script,style,link,iframe,noscript,template').forEach(e => e.remove());
-copy('<!doctype html>\n' + d.outerHTML);
+d.querySelectorAll('[data-api],[data-key],[data-token]').forEach(e => {
+  for (const a of ['data-api', 'data-key', 'data-token']) if (e.hasAttribute(a)) e.setAttribute(a, 'REDACTED');
+});
+const html = d.outerHTML.replace(/AIza[0-9A-Za-z_-]{35}/g, 'REDACTED_GOOGLE_BROWSER_KEY');
+copy('<!doctype html>\n' + html);
 ```
+
+> `tests/test_fixtures_clean.py` bu dizindeki her dosyayi anahtar/e-posta desenlerine
+> karsi tarar. Bir sey atlarsaniz test kirilir — bilerek boyle.
 
 4. Panoyu `tests/fixtures/real_ai_mode_tr.html` olarak kaydedin.
 
