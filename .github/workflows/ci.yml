@@ -13,7 +13,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install "pydantic>=2.9,<3.0" "pydantic-settings>=2.6,<3.0" pytest playwright
+      # pytest>=7: pytest.ini icindeki 'pythonpath' secenegi o surumle geldi.
+      - run: pip install "pydantic>=2.9,<3.0" "pydantic-settings>=2.6,<3.0" "pytest>=7" playwright
       # extract.js testleri gercek DOM API'leri gerektirdigi icin Chromium sart.
       # Google'a istek gitmez: fixture'lar route ile yerel olarak sunulur.
       - run: playwright install --with-deps chromium
