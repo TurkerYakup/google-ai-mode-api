@@ -3,6 +3,7 @@ cogu HTTP istemcisinde zaman asimina dusuyor. Gorev ac, ID al, sonra sonucu cek.
 
 import asyncio
 import logging
+import time
 import uuid
 from collections import OrderedDict
 from datetime import datetime, timezone
@@ -33,6 +34,8 @@ class TaskRecord:
         self.progress: Optional[str] = None
         self.result: Any = None
         self.error: Optional[Dict[str, str]] = None
+        self.done_at: Optional[float] = None
+        """Bitis zamani (monotonic) -- saklama suresi dolunca temizlemek icin."""
 
     def info(self, include_result: bool = True) -> TaskInfo:
         return TaskInfo(
@@ -52,12 +55,19 @@ class TaskRecord:
 class TaskQueue:
     """Tek isci: Google'a paralel yuklenmemek icin gorevler sirayla islenir."""
 
-    def __init__(self, runner: Runner, max_records: int = 1000, postback: Optional[Callable] = None) -> None:
+    def __init__(
+        self,
+        runner: Runner,
+        max_records: int = 200,
+        postback: Optional[Callable] = None,
+        retention: float = 3600.0,
+    ) -> None:
         self._runner = runner
         self._postback = postback
         self._q: asyncio.Queue[str] = asyncio.Queue()
         self._records: "OrderedDict[str, TaskRecord]" = OrderedDict()
         self._max = max_records
+        self._retention = retention
         self._worker: Optional[asyncio.Task] = None
 
     async def start(self) -> None:
@@ -76,10 +86,18 @@ class TaskQueue:
     def submit(self, kind: str, payload: Any, tag: Optional[str], postback_url: Optional[str]) -> TaskRecord:
         rec = TaskRecord(kind, payload, tag, postback_url)
         self._records[rec.id] = rec
-        while len(self._records) > self._max:
-            self._records.popitem(last=False)
+        self._purge()
         self._q.put_nowait(rec.id)
         return rec
+
+    def _purge(self) -> None:
+        """Sonuclar RAM'de duruyor; suresi dolanlari ve fazlaligi at."""
+        if self._retention > 0:
+            cutoff = time.monotonic() - self._retention
+            for tid in [t for t, r in self._records.items() if r.done_at and r.done_at < cutoff]:
+                self._records.pop(tid, None)
+        while len(self._records) > self._max:
+            self._records.popitem(last=False)
 
     def get(self, task_id: str) -> Optional[TaskRecord]:
         return self._records.get(task_id)
@@ -113,6 +131,8 @@ class TaskQueue:
                 log.warning("Gorev %s basarisiz: %s", rec.id, exc)
             finally:
                 rec.finished_at = _now()
+                rec.done_at = time.monotonic()
+                self._purge()
 
             if rec.postback_url and self._postback:
                 try:

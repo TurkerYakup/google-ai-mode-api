@@ -1,257 +1,299 @@
 # Google AI Mode API
 
-Google'ın **AI Mode** (`udm=50`) cevaplarını JSON olarak döndüren, Docker içinde çalışan bir API.
-SEO / **GEO (Generative Engine Optimization)** araştırması için tasarlandı: cevabın metnini değil,
-**hangi kaynakların atıf aldığını, hangi markanın geçtiğini, konuma ve cihaza göre neyin değiştiğini** ölçer.
+**Self-hosted JSON API for Google's AI Mode (`udm=50`), built for SEO / GEO research.**
 
-Resmî bir Google API'si yoktur. Bu servis, Docker içinde headless Chromium (Playwright) ile
-AI Mode sayfasını açar, cevabın akması bitene kadar bekler ve sonucu yapılandırılmış JSON'a çevirir.
+🇹🇷 [Türkçe README](README.tr.md)
+
+Google does not publish an official AI Mode API. This service runs headless Chromium
+(Playwright) inside Docker, opens the AI Mode result page, waits for the answer to finish
+streaming, and returns structured JSON.
+
+It is built around one question that classic rank tracking cannot answer:
+
+> **When Google's AI answers this query, whose content does it cite — and is that us?**
 
 ---
 
-## Ne döndürür
+## What you get back
 
 ```jsonc
 {
   "status": "ok",
-  "query": "en iyi crm yazılımı",
-  "answer": "## Öne çıkan seçenekler\n- **HubSpot** …",   // markdown
-  "blocks": [                                              // yapısal parçalar
+  "query": "best crm software",
+  "answer": "## Top options\n- **HubSpot** …",     // markdown
+  "blocks": [                                       // structured, claim-level
     { "type": "paragraph", "text": "…", "links": [ { "url": "…", "domain": "hubspot.com" } ] }
   ],
-  "citations": [                                           // görünme sırasına göre
+  "citations": [                                    // in order of appearance
     { "position": 1, "title": "…", "url": "https://…", "domain": "hubspot.com" }
   ],
-  "domains": [                                             // domain başına atıf payı
+  "domains": [                                      // share of voice per domain
     { "domain": "hubspot.com", "citations": 3, "first_position": 1, "share": 0.375, "urls": ["…"] }
   ],
-  "follow_ups": ["CRM fiyatları nedir?"],                  // Google'ın önerdiği devam soruları
-  "tracked_domains": [ { "domain": "ornek.com", "cited": true, "positions": [2] } ],
-  "tracked_brands": [ { "brand": "Örnek", "mentioned": true, "count": 2, "contexts": ["…"] } ],
+  "follow_ups": ["How much does a CRM cost?"],      // Google's suggested next questions
+  "tracked_domains": [ { "domain": "yoursite.com", "cited": true, "positions": [2] } ],
+  "tracked_brands": [ { "brand": "YourBrand", "mentioned": true, "count": 2, "contexts": ["…"] } ],
   "stats": { "characters": 1840, "words": 260, "citation_count": 8, "unique_domains": 5, "block_count": 12 },
   "source_url": "https://www.google.com/search?q=…&udm=50",
-  "device": "desktop", "hl": "tr", "gl": "TR",
+  "device": "desktop", "hl": "en", "gl": "US",
   "resolved_location": "Istanbul,Turkey",
   "cached": false, "truncated": false, "elapsed_ms": 24310
 }
 ```
 
-`blocks[].links` en değerli kısım: **hangi cümlenin hangi kaynağa dayandığını** eşleştirir.
-Klasik SERP'te "sıra 3'teyiz" derken, AI Mode'da soru "cevabın hangi iddiasında bize atıf var".
+`blocks[].links` is the part that matters most: it maps **which claim cites which source**,
+instead of dumping one flat link list for the whole answer.
 
 ---
 
-## Kurulum
+## Quick start
 
 ```bash
 git clone https://github.com/TurkerYakup/google-ai-mode-api.git
 cd google-ai-mode-api
-cp .env.example .env        # GAM_API_KEY'i doldurun
+cp .env.example .env          # set GAM_API_KEY if you expose this beyond localhost
 docker compose up -d --build
 ```
-
-Sağlık kontrolü:
 
 ```bash
 curl http://127.0.0.1:8000/health
 ```
 
-Swagger arayüzü: <http://127.0.0.1:8000/docs>
+Interactive docs (Swagger): <http://127.0.0.1:8000/docs>
 
-> Port varsayılan olarak yalnızca `127.0.0.1`'e bağlıdır. Dışarı açacaksanız **önce `GAM_API_KEY` verin**,
-> sonra `docker-compose.yml` içindeki port satırını değiştirin.
+> The port binds to `127.0.0.1` only. **Set `GAM_API_KEY` before** changing that in
+> `docker-compose.yml`.
 
----
-
-## Kullanım
-
-### Tek sorgu (senkron)
+### One query
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/v1/query \
-  -H 'Content-Type: application/json' -H 'X-API-Key: SIZIN_ANAHTARINIZ' \
+  -H 'Content-Type: application/json' \
   -d '{
-        "query": "en iyi crm yazılımı",
+        "query": "best crm software",
         "location": "Istanbul,Turkey",
         "device": "desktop",
-        "track_domains": ["ornek.com", "rakip.com"],
-        "track_brands": ["Örnek"]
+        "track_domains": ["yoursite.com", "competitor.com"],
+        "track_brands": ["YourBrand"]
       }'
 ```
 
-Hızlı deneme için GET de var:
+Or quickly via GET:
 
 ```bash
-curl "http://127.0.0.1:8000/v1/query?q=en+iyi+crm&track_domains=ornek.com,rakip.com"
+curl "http://127.0.0.1:8000/v1/query?q=best+crm&track_domains=yoursite.com,competitor.com"
 ```
 
-### Async görev (önerilen)
+### Async tasks (recommended)
 
-AI Mode cevabı 30–90 sn sürebilir; çoğu HTTP istemcisi bu kadar beklemez.
-Görev aç, ID al, sonucu sonra çek — istersen bitince webhook'a POST edilsin:
+An AI Mode answer takes 30–90 s to stream. Most HTTP clients give up first. Submit a task,
+get an ID, poll later — or have the result POSTed to your webhook:
 
 ```bash
-# 1) görevi kuyruğa at
 curl -s -X POST http://127.0.0.1:8000/v1/tasks/query \
-  -H 'Content-Type: application/json' -H 'X-API-Key: …' \
-  -d '{"query":"crm karşılaştırma","tag":"haftalik-tarama","postback_url":"https://sizin-sisteminiz/webhook"}'
+  -H 'Content-Type: application/json' \
+  -d '{"query":"crm comparison","tag":"weekly-scan","postback_url":"https://your-system/webhook"}'
 # → {"task_id":"a1b2…","status":"queued","poll_url":"/v1/tasks/a1b2…"}
 
-# 2) sonucu al
-curl -s http://127.0.0.1:8000/v1/tasks/a1b2… -H 'X-API-Key: …'
+curl -s http://127.0.0.1:8000/v1/tasks/a1b2…
 ```
 
-### Keyword listesi taraması
+### Keyword set
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/v1/tasks/batch \
-  -H 'Content-Type: application/json' -H 'X-API-Key: …' \
+  -H 'Content-Type: application/json' \
   -d '{
-        "queries": ["crm yazılımı", "crm fiyatları", "ücretsiz crm"],
-        "track_domains": ["ornek.com"],
+        "queries": ["crm software", "crm pricing", "free crm"],
+        "track_domains": ["yoursite.com"],
         "location": "Ankara,Turkey",
-        "tag": "crm-kumesi"
+        "tag": "crm-cluster"
       }'
 ```
 
-Görevler **sırayla** işlenir (istekler arası `GAM_BATCH_DELAY` saniye bekleme). Bu kasıtlı:
-paralel gitmek Google'ın doğrulama ekranını tetikler.
+Tasks run **sequentially** with `GAM_BATCH_DELAY` seconds between them. That is deliberate —
+firing them in parallel is the fastest way to get a verification page from Google.
 
 ---
 
-## Uçlar
+## Endpoints
 
-| Method | Uç | Açıklama |
+| Method | Path | Description |
 |---|---|---|
-| `GET` | `/health` | Durum, tarayıcı havuzu, bekleyen görev sayısı |
-| `POST` | `/v1/query` | Tek sorgu, senkron |
-| `GET` | `/v1/query?q=…` | Tek sorgu, senkron, hızlı deneme |
-| `POST` | `/v1/batch` | Keyword listesi, senkron (5'ten fazlası için görev kullanın) |
-| `POST` | `/v1/tasks/query` | Tek sorguyu kuyruğa atar → `202` + `task_id` |
-| `POST` | `/v1/tasks/batch` | Keyword listesini kuyruğa atar |
-| `GET` | `/v1/tasks/{id}` | Görev durumu ve sonucu |
-| `GET` | `/v1/tasks?status=done` | Görev listesi |
-| `DELETE` | `/v1/cache` | Önbelleği temizler |
-| `POST` | `/v1/browser/restart` | Chromium'u yeniden başlatır |
-| `GET` | `/v1/debug/html?q=…` | Ham HTML (selector güncellemek için, kapalı gelir) |
-| `GET` | `/v1/debug/screenshot?q=…` | Sayfa görüntüsü, base64 |
+| `GET` | `/health` | Status, browser pools, pending task count |
+| `POST` | `/v1/query` | Single query, synchronous |
+| `GET` | `/v1/query?q=…` | Single query, synchronous, convenience form |
+| `POST` | `/v1/batch` | Keyword list, synchronous (use tasks for >5) |
+| `POST` | `/v1/tasks/query` | Queue one query → `202` + `task_id` |
+| `POST` | `/v1/tasks/batch` | Queue a keyword list |
+| `GET` | `/v1/tasks/{id}` | Task status and result |
+| `GET` | `/v1/tasks?status=done` | List tasks |
+| `DELETE` | `/v1/cache` | Flush the result cache |
+| `POST` | `/v1/browser/restart` | Restart Chromium |
+| `GET` | `/v1/debug/html?q=…` | Raw HTML, for fixing selectors (off by default) |
+| `GET` | `/v1/debug/screenshot?q=…` | Full-page PNG, base64 |
 
-Kimlik doğrulama: `GAM_API_KEY` doluysa tüm `/v1/*` uçları `X-API-Key` başlığı ister.
+When `GAM_API_KEY` is set, every `/v1/*` route requires an `X-API-Key` header.
 
 ---
 
-## İsteğe bağlı parametreler
+## Request parameters
 
-| Alan | Alias | Varsayılan | Ne işe yarar |
+| Field | Alias | Default | Purpose |
 |---|---|---|---|
-| `query` | `keyword`, `q` | — | Sorulacak soru |
-| `hl` | `language_code` | `GAM_HL` | Arayüz dili (`tr`, `en`, `de`) |
-| `gl` | `country_code` | `GAM_GL` | Ülke kodu (`TR`, `US`) |
-| `google_domain` | `se_domain` | `www.google.com` | `www.google.com.tr` gibi |
-| `location` | `location_name` | — | Kanonik konum adı → `uule`. Örn. `Istanbul,Turkey` |
-| `uule` | — | — | Hazır uule değeri; verilirse `location` yok sayılır |
-| `device` | — | `desktop` | `desktop` \| `mobile` — ayrı profil, ayrı UA/viewport |
-| `track_domains` | — | `[]` | Bu domainler atıf almış mı (alt alan adları dahil) |
-| `track_brands` | — | `[]` | Bu ifadeler cevap metninde geçiyor mu + bağlam |
-| `include_blocks` | — | `true` | Yapısal blok çıktısı |
-| `include_html` | — | `false` | Cevap kapsayıcısının ham HTML'i |
-| `include_screenshot` | — | `false` | Sayfa PNG'si, base64 (rapora kanıt) |
-| `include_follow_ups` | — | `true` | Devam soruları |
-| `timeout` | — | `GAM_ANSWER_TIMEOUT` | 5–300 sn |
-| `cache` | — | `true` | Aynı sorguyu TTL içinde tekrar sormaz |
+| `query` | `keyword`, `q` | — | The question to ask |
+| `hl` | `language_code` | `GAM_HL` | Interface language (`tr`, `en`, `de`) |
+| `gl` | `country_code` | `GAM_GL` | Country code (`TR`, `US`) |
+| `google_domain` | `se_domain` | `www.google.com` | e.g. `www.google.co.uk` |
+| `location` | `location_name` | — | Canonical location → `uule`. e.g. `Istanbul,Turkey` |
+| `uule` | — | — | Pass your own uule; overrides `location` |
+| `device` | — | `desktop` | `desktop` \| `mobile` — separate profile, UA and viewport |
+| `track_domains` | — | `[]` | Did these domains get cited (subdomains included) |
+| `track_brands` | — | `[]` | Do these strings appear in the answer, with context |
+| `include_blocks` | — | `true` | Structured block output |
+| `include_html` | — | `false` | Raw HTML of the answer container |
+| `include_screenshot` | — | `false` | Base64 PNG, for reports |
+| `include_follow_ups` | — | `true` | Suggested follow-up questions |
+| `timeout` | — | `GAM_ANSWER_TIMEOUT` | 5–300 s |
+| `cache` | — | `true` | Reuse a recent identical query |
 
-Alias'lar DataForSEO'dan geçişi kolaylaştırmak için var: `language_code`, `location_name`,
-`se_domain`, `keyword` alanları da kabul edilir.
+The aliases exist so an existing DataForSEO integration can point here with minimal edits:
+`keyword`, `language_code`, `location_name` and `se_domain` are all accepted.
 
 ---
 
-## Konfigürasyon
+## Configuration
 
-Tüm ayarlar `GAM_` önekli ortam değişkenleri (`.env`). Tam liste için [.env.example](.env.example).
-Öne çıkanlar:
+Everything is a `GAM_`-prefixed environment variable (`.env`). Full list in
+[.env.example](.env.example). The ones that matter:
 
-| Değişken | Varsayılan | Not |
+| Variable | Default | Note |
 |---|---|---|
-| `GAM_API_KEY` | *(boş)* | Boşsa kimlik doğrulama **kapalı** |
-| `GAM_POOL_SIZE` | `1` | Eşzamanlı sekme. 2'nin üstüne çıkarmayın |
-| `GAM_ANSWER_TIMEOUT` | `90` | Cevabın akmasını bekleme sınırı |
-| `GAM_STABLE_FOR` | `1.6` | Metin bu kadar değişmezse akış bitti sayılır |
-| `GAM_CACHE_TTL` | `900` | 0 = önbellek kapalı |
-| `GAM_BATCH_DELAY` | `2.5` | Toplu sorguda istekler arası bekleme |
-| `GAM_CONSENT_CHOICE` | `reject` | Çerez onayında varsayılan: **tümünü reddet** |
-| `GAM_ANSWER_SELECTORS` | *(bkz. config)* | Google DOM'u değişirse JSON dizi ile ezin |
+| `GAM_API_KEY` | *(empty)* | Empty means **authentication disabled** |
+| `GAM_POOL_SIZE` | `1` | Concurrent tabs. Do not go above 2 |
+| `GAM_ANSWER_TIMEOUT` | `90` | Max wait for the answer to finish streaming |
+| `GAM_STABLE_FOR` | `1.6` | Text unchanged this long ⇒ streaming finished |
+| `GAM_CACHE_TTL` | `900` | `0` disables the cache |
+| `GAM_BATCH_DELAY` | `2.5` | Pause between queries in a batch |
+| `GAM_CONSENT_CHOICE` | `reject` | Cookie banner default: **reject all** |
+| `GAM_ANSWER_SELECTORS` | *(see config)* | Override as a JSON array when Google's DOM shifts |
 
 ---
 
-## Bilinen sınırlar
+## How this compares to commercial APIs
 
-Bunlar tasarım gereği; ticari alternatiflerin çözdüğü, bu servisin çözmediği şeyler:
+There are real vendors selling exactly this, and they are a reasonable choice if you'd
+rather buy than run. Roughly, as of **August 2026** — verify current pricing yourself:
 
-- **Tek IP.** Proxy havuzu yok. Sık sorguda Google doğrulama ekranı çıkarır ve API `503 blocked` döner.
-  Ciddi hacim için önüne bir residential proxy koyup `GAM_BROWSER_ARGS` ile `--proxy-server=…` verin.
-- **CAPTCHA aşılmaz.** Doğrulama ekranı çıktığında hata döner; bilerek böyle. Profili elle tazelemek için
-  `scripts/login.py` var.
-- **Selector'lar kırılgan.** Google DOM'u obfuscated ve sık değişiyor. Bu yüzden üç katmanlı savunma var:
-  yapılandırılabilir selector listesi → "en büyük metin bloğu" heuristiği → `/v1/debug/html` ile yeni
-  selector bulma. `extracted_by` alanı hangisinin devreye girdiğini söyler.
-- **`uule` kodlaması resmî değil.** Topluluk tarafından çözülmüş biçim; Google yok sayabilir.
-  Konum kritikse çıktıyı doğrulayın veya kendi `uule` değerinizi geçin.
-- **Görevler bellekte.** Yeniden başlatınca kuyruk sıfırlanır. Kalıcılık gerekirse Redis/Postgres ekleyin.
-- **AI Mode her sorguda çıkmaz.** Google bazı sorgularda AI cevabı üretmez; bu durumda `502 no_answer` gelir.
+| Provider | AI Mode support | Indicative price | Model |
+|---|---|---|---|
+| [DataForSEO](https://dataforseo.com/pricing/serp/google-ai-mode-serp-api) | `serp/google/ai_mode`, live + standard (normal/high priority), advanced + HTML endpoints | from **$0.004 / page** (live), $50 minimum top-up | Pay as you go |
+| [SerpApi](https://serpapi.com/google-ai-mode-api) | `engine=google_ai_mode`; `text_blocks`, `references`, shopping/local results, inline images & videos, multi-turn follow-ups, markdown output | from **$75 / mo** for 5 000 searches, 100 free | Subscription |
+| [Bright Data](https://brightdata.com/blog/web-data/best-serp-apis) | SERP API | ~**$3 / 1 000** results, plans from $499/mo | PAYG + subscription |
+| [Oxylabs](https://oxylabs.io/blog/best-serp-api) | SERP Scraper API, pay-per-success | ~**$0.80–1.00 / 1 000** | Subscription tiers |
+| **This project** | AI Mode only | infrastructure cost only | Self-hosted |
+
+**Buy instead of running this if** you need thousands of queries a day, guaranteed uptime,
+a proxy pool, and someone to call when Google changes its markup.
+
+**Run this if** you want a few hundred queries a day for your own research, want the raw
+HTML and screenshots, want to add your own metrics, or simply don't want a per-query bill.
+It has no proxy pool, no SLA, and one IP address.
+
+Features on the roadmap, openly borrowed from the vendors above: multi-turn follow-ups in a
+single session, extraction of shopping / local / video blocks, and a token-efficient
+`output=md` response format.
 
 ---
 
-## Profil bakımı
+## Known limitations
 
-Çerezler ve oturum `./data/profile/{desktop,mobile}` altında tutulur (bind mount).
-Doğrulama ekranına takılırsanız host'ta görünür bir tarayıcı açıp elle çözün:
+By design, and stated plainly:
+
+- **Single IP, no proxy pool.** Query hard enough and Google shows a verification page; the
+  API then returns `503 blocked`. For volume, put a residential proxy in front via
+  `GAM_BROWSER_ARGS` (`--proxy-server=…`).
+- **CAPTCHAs are not solved.** When a verification page appears the request fails, on
+  purpose. `scripts/login.py` lets you clear it by hand in a visible browser.
+- **Selectors are fragile.** Google's DOM is obfuscated and changes often. Hence three
+  layers: a configurable selector list → a "largest text block" heuristic → `/v1/debug/html`
+  to find a new one. The `extracted_by` field tells you which layer fired.
+- **The `uule` encoding is unofficial.** It is the community-derived format; Google may
+  ignore it. If location precision is critical, verify the output or pass your own `uule`.
+- **Tasks live in memory.** A restart clears the queue. Add Redis/Postgres if you need
+  durability.
+- **AI Mode doesn't always trigger.** Google skips the AI answer for some queries; you get
+  `502 no_answer`.
+
+---
+
+## Maintaining the browser profile
+
+Cookies and session state live in `./data/profile/{desktop,mobile}` (bind mount). If you hit
+a verification page, open a visible browser on the host and clear it manually:
 
 ```bash
 pip install playwright && playwright install chromium
 python scripts/login.py --profile ./data/profile/desktop
 ```
 
-Pencereyi kapatınca profil kaydedilir; ardından `docker compose restart`.
+Close the window to save the profile, then `docker compose restart`.
 
 ---
 
-## Geliştirme
+## Development
 
 ```bash
-python -m venv .venv && .venv/Scripts/activate     # Windows
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && playwright install chromium
 uvicorn app.main:app --reload
 ```
 
-Testler (tarayıcı gerektirmez, saf analiz fonksiyonları):
+Tests cover the pure analysis functions and need no browser:
 
 ```bash
 pytest -q
 ```
 
-Dosya düzeni:
-
 ```
 app/
-  main.py       FastAPI uçları, kimlik doğrulama, hata eşlemesi
-  scraper.py    Sayfayı sürme, akışın bitmesini bekleme, ayıklama
-  browser.py    Cihaz başına kalıcı Chromium profili + sayfa havuzu
-  js/extract.js DOM → blok + markdown + atıf dönüşümü
-  analysis.py   Domain payı, marka takibi, istatistikler
-  tasks.py      Async görev kuyruğu + postback
-  cache.py      TTL önbellek
-  uule.py       Konum kodlaması
-scripts/login.py  Profili elle hazırlamak için görünür tarayıcı
+  main.py       FastAPI routes, auth, error mapping
+  scraper.py    Drives the page, waits for streaming, extracts
+  browser.py    Persistent Chromium profile per device + page pool
+  js/extract.js DOM → blocks + markdown + citations
+  analysis.py   Domain share, brand tracking, stats
+  tasks.py      Async task queue + postback
+  cache.py      TTL cache
+  uule.py       Location encoding
+scripts/login.py  Visible browser for preparing the profile
 ```
 
 ---
 
-## Sorumluluk
+## Contributing
 
-Bu araç Google'ın herkese açık arama sonuçlarını otomatikleştirir. Google'ın kullanım şartları
-otomatik erişimi kısıtlar; kullanım sorumluluğu size aittir. Doğrulama ekranlarını aşmaya yönelik
-hiçbir mekanizma içermez ve içermeyecektir. Makul hızda, kendi araştırmanız için kullanın.
+**Please open issues — that's the fastest way to keep this working.**
 
-## Lisans
+Google changes its markup without warning, so breakage is expected rather than exceptional.
+Selector fixes ship quickly, and a good bug report is most of the work:
 
-MIT — bkz. [LICENSE](LICENSE).
+- **Extraction broke?** Include the query, `hl`/`gl`/`device`, and the `extracted_by` value.
+  Output from `/v1/debug/html` (with `GAM_DEBUG_ENDPOINTS=true`) helps enormously.
+- **Wrong or missing citations?** Paste the `citations` array and what you expected.
+- **Feature ideas welcome**, particularly SEO/GEO metrics worth computing from an answer.
+
+Pull requests are welcome for selector updates, new extractors, and language coverage.
+Keep `pytest -q` green.
+
+---
+
+## Responsible use
+
+This tool automates publicly visible Google search results. Google's Terms of Service
+restrict automated access; how you use it is your responsibility. It contains no mechanism
+for defeating verification pages and will not gain one. Query at a sane rate, for your own
+research.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

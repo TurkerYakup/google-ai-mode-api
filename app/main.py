@@ -1,13 +1,16 @@
 import asyncio
 import base64
+import json
 import logging
 import time
+import uuid
 from contextlib import asynccontextmanager
-from typing import List, Optional
+from pathlib import Path
+from typing import AsyncIterator, List, Optional, Union
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 
 from . import __version__
 from .analysis import track_brands, track_domains
@@ -19,11 +22,16 @@ from .models import (
     BatchRequest,
     BatchResponse,
     BatchTaskRequest,
+    ChatRequest,
     Device,
     ErrorResponse,
+    Link,
+    Mode,
+    Mode,
     QueryOptions,
     QueryRequest,
     QueryResult,
+    SimpleResult,
     TaskCreated,
     TaskInfo,
     TaskList,
@@ -52,6 +60,9 @@ def _cache_key(query: str, opts: QueryOptions) -> str:
             "domain": opts.google_domain or settings.google_domain,
             "uule": opts.uule or opts.location,
             "device": opts.device,
+            # 'llm' sonucu SEO alanlari kirpilmis olarak saklanir; ayni anahtari
+            # paylasirsa 'seo' istegine eksik yanit doner.
+            "mode": opts.mode,
         }
     )
 
@@ -137,7 +148,12 @@ async def _postback(rec: TaskRecord) -> None:
     log.info("Postback gonderildi: %s -> %s", rec.id, rec.postback_url)
 
 
-queue = TaskQueue(_task_runner, postback=_postback)
+queue = TaskQueue(
+    _task_runner,
+    max_records=settings.task_max_records,
+    postback=_postback,
+    retention=settings.task_retention,
+)
 
 
 # --- uygulama --------------------------------------------------------------
@@ -195,6 +211,7 @@ async def health() -> dict:
         "status": "ok" if browser.alive else "starting",
         "version": __version__,
         "browsers": browser.status(),
+        "memory_mb": BrowserSession.memory_mb(),
         "pending_tasks": queue.pending(),
         "cache_ttl": settings.cache_ttl,
     }
@@ -203,20 +220,36 @@ async def health() -> dict:
 # --- uclar: senkron sorgu --------------------------------------------------
 
 
+def _shape(result: QueryResult) -> Union[QueryResult, SimpleResult]:
+    """mode='llm' istendiginde SEO metriklerini kirpip sade cevaba indirger."""
+    if result.mode != "llm":
+        return result
+    return SimpleResult(
+        query=result.query,
+        answer=result.answer,
+        sources=[Link(title=c.title, url=c.url, domain=c.domain) for c in result.citations],
+        follow_ups=result.follow_ups,
+        cached=result.cached,
+        truncated=result.truncated,
+        elapsed_ms=result.elapsed_ms,
+    )
+
+
 @app.post(
     "/v1/query",
-    response_model=QueryResult,
+    response_model=Union[QueryResult, SimpleResult],
     tags=["sorgu"],
     summary="Tek sorgu (senkron)",
+    description="mode='llm' verilirse yanit SEO metrikleri olmadan sade halde doner.",
     dependencies=[Depends(require_key)],
 )
-async def query_post(req: QueryRequest) -> QueryResult:
-    return await run_query(req.query, req)
+async def query_post(req: QueryRequest) -> Union[QueryResult, SimpleResult]:
+    return _shape(await run_query(req.query, req))
 
 
 @app.get(
     "/v1/query",
-    response_model=QueryResult,
+    response_model=Union[QueryResult, SimpleResult],
     tags=["sorgu"],
     summary="Tek sorgu (senkron, GET)",
     dependencies=[Depends(require_key)],
@@ -227,6 +260,7 @@ async def query_get(
     gl: Optional[str] = None,
     location: Optional[str] = None,
     device: Device = "desktop",
+    mode: Mode = Query("seo", description="'seo' tam analiz, 'llm' sade cevap"),
     track_domains: Optional[str] = Query(None, description="Virgulle ayrilmis domain listesi"),
     track_brands: Optional[str] = Query(None, description="Virgulle ayrilmis marka listesi"),
     include_blocks: bool = True,
@@ -234,12 +268,13 @@ async def query_get(
     include_screenshot: bool = False,
     cache_: bool = Query(True, alias="cache"),
     timeout: Optional[float] = Query(None, ge=5, le=300),
-) -> QueryResult:
+) -> Union[QueryResult, SimpleResult]:
     opts = QueryOptions(
         hl=hl,
         gl=gl,
         location=location,
         device=device,
+        mode=mode,
         track_domains=[d.strip() for d in (track_domains or "").split(",") if d.strip()],
         track_brands=[b.strip() for b in (track_brands or "").split(",") if b.strip()],
         include_blocks=include_blocks,
@@ -248,7 +283,7 @@ async def query_get(
         cache=cache_,
         timeout=timeout,
     )
-    return await run_query(q, opts)
+    return _shape(await run_query(q, opts))
 
 
 @app.post(

@@ -1,0 +1,53 @@
+name: "Extraction broken / Ayıklama bozuldu"
+description: "The API returned no_answer, empty text, or wrong citations. / no_answer, boş metin veya yanlış atıf döndü."
+title: "[extraction] "
+labels: ["extraction", "bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Google changes its markup often — these reports are expected and welcome.
+        Google markup'ını sık değiştiriyor; bu tür raporlar beklenen ve makbul.
+
+  - type: input
+    id: query
+    attributes:
+      label: Query / Sorgu
+      placeholder: "Bursa yapay zeka firmaları"
+    validations:
+      required: true
+
+  - type: input
+    id: params
+    attributes:
+      label: "hl / gl / device / location"
+      placeholder: "tr / TR / desktop / Bursa,Turkey"
+    validations:
+      required: true
+
+  - type: input
+    id: extracted_by
+    attributes:
+      label: "`extracted_by` value / değeri"
+      description: "Response field. If the request failed entirely, write the error code. / Yanıt alanı; istek tamamen başarısızsa hata kodunu yazın."
+      placeholder: "heuristic  |  selector:div[data-subtree='aimc']  |  no_answer"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected vs. what you got / Beklenen ve gelen
+    validations:
+      required: true
+
+  - type: textarea
+    id: debug
+    attributes:
+      label: "Debug output (optional but very helpful) / Debug çıktısı (isteğe bağlı, çok yardımcı)"
+      description: |
+        Set `GAM_DEBUG_ENDPOINTS=true`, then attach the relevant part of
+        `/v1/debug/html?q=…`. Trim it — the container HTML around the answer is enough.
+        `GAM_DEBUG_ENDPOINTS=true` yapıp `/v1/debug/html?q=…` çıktısının ilgili kısmını ekleyin.
+        Cevabın etrafındaki kapsayıcı HTML yeterli.
+      render: html

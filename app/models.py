@@ -4,6 +4,9 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 Device = Literal["desktop", "mobile"]
 TaskStatus = Literal["queued", "running", "done", "error"]
+Mode = Literal["seo", "llm"]
+"""'seo': atif/domain/marka analizini iceren tam cikti.
+'llm': sadece cevap metni ve kaynaklar -- Google AI Mode'u ucretsiz bir LLM gibi kullanmak icin."""
 
 
 class QueryOptions(BaseModel):
@@ -58,6 +61,12 @@ class QueryOptions(BaseModel):
 
     timeout: Optional[float] = Field(None, ge=5, le=300, description="Cevap icin ust sinir (saniye)")
     cache: bool = Field(True, description="Ayni sorgu icin onbellek kullan (TTL sunucu ayari)")
+
+    mode: Mode = Field(
+        "seo",
+        description="'seo': atif/domain/marka analiziyle tam cikti. "
+        "'llm': sadece cevap metni + kaynaklar (Google AI Mode'u ucretsiz bir LLM gibi kullanmak icin).",
+    )
 
 
 class QueryRequest(QueryOptions):
@@ -165,12 +174,26 @@ class QueryResult(BaseModel):
     hl: Optional[str] = None
     gl: Optional[str] = None
     resolved_location: Optional[str] = None
+    mode: Mode = "seo"
     cached: bool = False
     truncated: bool = Field(False, description="Akis bitmeden zaman asimina ugradi")
     elapsed_ms: int
     extracted_by: Optional[str] = Field(None, description="Hangi selector/heuristik ile bulundu (hata ayiklama)")
     html: Optional[str] = None
     screenshot_base64: Optional[str] = None
+
+
+class SimpleResult(BaseModel):
+    """mode='llm' ciktisi: SEO metrikleri olmadan sade cevap."""
+
+    status: Literal["ok"] = "ok"
+    query: str
+    answer: str
+    sources: List[Link] = Field(default_factory=list, description="Cevabin dayandigi kaynaklar")
+    follow_ups: List[str] = []
+    cached: bool = False
+    truncated: bool = False
+    elapsed_ms: int
 
 
 class BatchItem(BaseModel):
@@ -215,6 +238,34 @@ class TaskInfo(BaseModel):
 class TaskList(BaseModel):
     count: int
     tasks: List[TaskInfo]
+
+
+# --- OpenAI uyumlu sohbet ucu ---------------------------------------------
+
+
+class ChatMessage(BaseModel):
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+
+class ChatRequest(BaseModel):
+    """OpenAI /v1/chat/completions ile ayni govde. AI Mode durumsuzdur:
+    sorgu olarak son kullanici mesaji kullanilir, gecmis baglam gonderilmez."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    model: str = Field("google-ai-mode", description="Yok sayilir, uyumluluk icin var")
+    messages: List[ChatMessage] = Field(..., min_length=1)
+    stream: bool = Field(False, description="SSE ile parca parca gonder")
+
+    # OpenAI disi, istege bagli eklentiler
+    hl: Optional[str] = None
+    gl: Optional[str] = None
+    location: Optional[str] = None
+    device: Device = "desktop"
+    include_sources: bool = Field(
+        True, description="Cevabin sonuna kaynak listesi eklensin mi"
+    )
 
 
 class ErrorResponse(BaseModel):

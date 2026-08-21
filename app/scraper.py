@@ -160,6 +160,8 @@ async def scrape(page: Page, query: str, opts: QueryOptions, s: Settings) -> Que
     answer: str = data["markdown"]
     citations = build_citations(data.get("citations") or [])
     raw_blocks = data.get("blocks") or []
+    # 'llm' modunda cevap ve kaynaklar disindaki SEO analizleri hesaplanmaz.
+    seo = opts.mode == "seo"
 
     screenshot = None
     if opts.include_screenshot:
@@ -172,18 +174,19 @@ async def scrape(page: Page, query: str, opts: QueryOptions, s: Settings) -> Que
     return QueryResult(
         query=query,
         answer=answer,
-        blocks=[Block(**b) for b in raw_blocks] if opts.include_blocks else None,
+        blocks=[Block(**b) for b in raw_blocks] if (seo and opts.include_blocks) else None,
         citations=citations,
-        domains=domain_stats(citations),
+        domains=domain_stats(citations) if seo else [],
         follow_ups=(data.get("follow_ups") or []) if opts.include_follow_ups else [],
-        tracked_domains=track_domains(citations, opts.track_domains),
-        tracked_brands=track_brands(answer, opts.track_brands),
+        tracked_domains=track_domains(citations, opts.track_domains) if seo else [],
+        tracked_brands=track_brands(answer, opts.track_brands) if seo else [],
         stats=answer_stats(answer, citations, len(raw_blocks)),
         source_url=url,
         device=opts.device,
         hl=opts.hl or s.hl,
         gl=opts.gl or s.gl,
         resolved_location=resolved_location,
+        mode=opts.mode,
         truncated=truncated,
         elapsed_ms=int((time.monotonic() - started) * 1000),
         extracted_by=data.get("how"),

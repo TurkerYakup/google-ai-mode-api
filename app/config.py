@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     pool_size: int = 1
     """Es zamanli sayfa (sekme) sayisi. Google rate-limit'i sert, 1-2'de tutun."""
     browser_args: List[str] = []
+    page_recycle_after: int = 25
+    """Bir sekme bu kadar istekte kullanildiktan sonra kapatilip yeniden acilir.
+    Chromium renderer RAM'i boylece geri verilir. 0 = kapali (onerilmez)."""
 
     # --- Arama ---
     google_domain: str = "www.google.com"
@@ -45,6 +48,12 @@ class Settings(BaseSettings):
     batch_delay: float = 2.5
     """Toplu sorguda istekler arasi bekleme (saniye). Google rate-limit'i icin dusurmeyin."""
     max_batch_size: int = 50
+
+    # --- Gorev saklama ---
+    task_retention: float = 3600.0
+    """Bitmis gorev sonuclari bu sure sonra bellekten silinir (saniye). Sonuclar RAM'de tutulur."""
+    task_max_records: int = 200
+    """Bellekte tutulacak en fazla gorev kaydi. Eskiler once silinir."""
 
     # --- Zamanlama (saniye) ---
     nav_timeout: float = 45.0
