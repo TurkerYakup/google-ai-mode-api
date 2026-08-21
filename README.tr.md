@@ -228,15 +228,22 @@ Tasarım gereği, açıkça:
 
 ## Profil bakımı
 
-Çerezler ve oturum `./data/profile/{desktop,mobile}` altında (bind mount). Doğrulama ekranına
-takılırsanız host'ta görünür bir tarayıcı açıp elle çözün:
+Çerezler ve oturum `profile` adlı Docker volume'unda, `/data/profile/{desktop,mobile}`
+altında durur. Adlandırılmış volume kullanılıyor: imajdaki `app:app` sahipliği böylece
+korunuyor — uygulama root olarak çalışmadığı için taze bir bind mount dizinine yazamazdı.
+
+Doğrulama ekranına takılırsanız, ekranı olan bir makinede profili elle hazırlayıp kopyalayın:
 
 ```bash
 pip install playwright && playwright install chromium
-python scripts/login.py --profile ./data/profile/desktop
+python scripts/login.py --profile ./profile-desktop     # açılan pencerede çözün, kapatın
+docker compose cp ./profile-desktop google-ai-mode-api:/data/profile/desktop
+docker compose restart
 ```
 
-Pencereyi kapatınca profil kaydedilir, ardından `docker compose restart`.
+Bind mount tercih ederseniz `docker-compose.yml` içindeki volume satırını
+`./data/profile:/data/profile` yapın ve önce `mkdir -p data/profile && sudo chown -R 1000:1000 data`
+çalıştırın — aksi halde container profil dizinini oluşturamaz ve başlamaz.
 
 ---
 

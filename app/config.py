@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     pool_size: int = 1
     """Es zamanli sayfa (sekme) sayisi. Google rate-limit'i sert, 1-2'de tutun."""
     browser_args: List[str] = []
+    browser_channel: Optional[str] = "chromium"
+    """Hangi Chromium ikilisi kullanilacak. Varsayilan 'chromium' tam tarayiciyi yeni
+    headless modunda calistirir; bos birakilirsa Playwright'in 'headless shell' ikilisine
+    duser -- o surum daha kolay bot olarak isaretleniyor."""
     page_recycle_after: int = 25
     """Bir sekme bu kadar istekte kullanildiktan sonra kapatilip yeniden acilir.
     Chromium renderer RAM'i boylece geri verilir. 0 = kapali (onerilmez)."""

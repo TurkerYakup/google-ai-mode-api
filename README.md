@@ -229,15 +229,24 @@ By design, and stated plainly:
 
 ## Maintaining the browser profile
 
-Cookies and session state live in `./data/profile/{desktop,mobile}` (bind mount). If you hit
-a verification page, open a visible browser on the host and clear it manually:
+Cookies and session state live in the `profile` Docker volume, under
+`/data/profile/{desktop,mobile}`. A named volume is used so the image's `app:app`
+ownership carries over — the app does not run as root and could not write to a fresh
+bind-mounted host directory.
+
+If you hit a verification page, prepare the profile by hand on a machine with a screen and
+copy it in:
 
 ```bash
 pip install playwright && playwright install chromium
-python scripts/login.py --profile ./data/profile/desktop
+python scripts/login.py --profile ./profile-desktop     # solve it in the window, then close
+docker compose cp ./profile-desktop google-ai-mode-api:/data/profile/desktop
+docker compose restart
 ```
 
-Close the window to save the profile, then `docker compose restart`.
+Prefer a bind mount instead? Swap the volume line in `docker-compose.yml` for
+`./data/profile:/data/profile` and run `mkdir -p data/profile && sudo chown -R 1000:1000 data`
+first — otherwise the container cannot create the profile directory and will not start.
 
 ---
 

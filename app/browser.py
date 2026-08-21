@@ -107,6 +107,7 @@ class BrowserSession:
             ctx = await self._pw.chromium.launch_persistent_context(
                 user_data_dir=str(profile),
                 headless=s.headless,
+                channel=s.browser_channel or None,
                 args=BASE_ARGS + list(s.browser_args),
                 viewport=_VIEWPORTS[device],
                 device_scale_factor=3 if is_mobile else 1,
