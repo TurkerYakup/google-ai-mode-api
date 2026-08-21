@@ -1,7 +1,7 @@
 services:
   google-ai-mode-api:
-    # Hazir imaji cekmek icin:  docker compose pull && docker compose up -d
-    # Kaynaktan derlemek icin:  docker compose up -d --build
+    # Pull the prebuilt image:  docker compose pull && docker compose up -d
+    # Build from source:        docker compose up -d --build
     image: ghcr.io/turkeryakup/ai-mode-api:latest
     build: .
     container_name: google-ai-mode-api
@@ -11,25 +11,56 @@ services:
     env_file:
       - .env
     volumes:
-      # Cerezler/oturum burada kalir. Adlandirilmis volume kullaniyoruz: Docker ilk
-      # olusturmada imajdaki sahipligi (app:app) kopyalar, boylece container root
-      # olmadan yazabilir. Bind mount'a gecerseniz (`./data/profile:/data/profile`)
-      # dizini once host'ta olusturup `chown -R 1000:1000 ./data` yapmalisiniz --
-      # aksi halde uygulama profil dizinini yaratamaz ve baslamaz.
+      # Cookies and session state live here. A named volume is used so the image's
+      # app:app ownership is preserved — the app does not run as root and could not
+      # write into a fresh bind-mount directory. If you switch to a bind mount
+      # (./data/profile:/data/profile), create it first and
+      # `chown -R 1000:1000 ./data`, otherwise startup fails.
       - profile:/data/profile
-    # Chromium paylasimli bellek olmadan sekme cokerttir.
+
+    # Chromium crashes tabs without enough shared memory.
     shm_size: "1gb"
+
+    # Chromium spawns many child processes and PID 1 (uvicorn) does not reap them.
+    # Without an init process they accumulate as zombies — especially if you call
+    # POST /v1/browser/restart periodically, which is the recommended way to reclaim
+    # memory on long-running deployments.
+    init: true
+
+    # This container renders remote, untrusted JavaScript for a living, so Chromium's
+    # own sandbox is the last line of defence and must keep working. Docker's default
+    # seccomp profile blocks the clone/unshare calls that sandbox needs, which is why
+    # people reach for seccomp=unconfined — the worst possible choice here. Playwright
+    # publishes a profile that allows exactly those calls and keeps everything else
+    # filtered. Vendored as seccomp_profile.json; the app therefore does NOT pass
+    # --no-sandbox (see GAM_DISABLE_SANDBOX if you ever must).
     security_opt:
-      - seccomp=unconfined
-    # Kacak bir Chromium surecinin host'u bogmamasi icin ust sinir.
+      - seccomp=./seccomp_profile.json
+
+    # Upper bound so a runaway Chromium cannot take the host down.
     mem_limit: 2g
-    # Docker'in json-file surucusu varsayilan olarak SINIRSIZ buyur. Her istek
-    # loglandigi icin uzun calisan kurulumda disk doldurur. 30 MB'da tutuyoruz.
+
+    # Docker's json-file driver grows without limit by default and every request is
+    # logged, so a long-running deployment fills the disk. Capped at 30 MB.
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+
+    # NOTE: `restart: unless-stopped` does NOT react to health status. An unhealthy
+    # container keeps running unhealthy forever. Watch /health externally, or add a
+    # supervisor such as willfarrell/autoheal. See the README.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).status==200 else 1)"
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
 
 volumes:
   profile:

@@ -1,6 +1,13 @@
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.32,<1.0
-playwright>=1.49
 pydantic>=2.9,<3.0
 pydantic-settings>=2.6,<3.0
 httpx>=0.27,<1.0
+
+# Pinned exactly, on purpose. Each Playwright release bundles a specific Chromium
+# build, and which browser binary runs measurably changes how Google's bot detection
+# treats us (see GAM_BROWSER_CHANNEL in the README). With a floating version, an image
+# rebuilt six months from now would ship a different Chromium and a different
+# fingerprint — and "did Google change, or did my browser?" would become unanswerable.
+# Bump this deliberately, and re-run scripts/smoke_live.py afterwards.
+playwright==1.62.0

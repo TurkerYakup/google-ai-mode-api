@@ -20,8 +20,12 @@ from .config import Settings
 
 log = logging.getLogger(__name__)
 
+# --no-sandbox BILEREK burada degil. Bu container'in isi tanimi geregi uzaktan gelen,
+# kontrol etmedigimiz JavaScript'i render etmek; Chromium'un kendi sandbox'i son savunma
+# hatti. docker-compose.yml Playwright'in seccomp profilini veriyor, o profil de
+# clone/unshare'e izin verdigi icin sandbox container icinde calisiyor.
+# Zorunlu kalirsaniz GAM_DISABLE_SANDBOX=true var, ama once seccomp profilini kontrol edin.
 BASE_ARGS = [
-    "--no-sandbox",
     "--disable-dev-shm-usage",
     "--disable-gpu",
     "--no-first-run",
@@ -120,7 +124,9 @@ class BrowserSession:
                 user_data_dir=str(profile),
                 headless=s.headless,
                 channel=s.browser_channel or None,
-                args=BASE_ARGS + list(s.browser_args),
+                args=BASE_ARGS
+                + (["--no-sandbox"] if s.disable_sandbox else [])
+                + list(s.browser_args),
                 proxy=proxy,
                 viewport=_VIEWPORTS[device],
                 device_scale_factor=3 if is_mobile else 1,

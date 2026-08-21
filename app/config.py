@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     pool_size: int = 1
     """Es zamanli sayfa (sekme) sayisi. Google rate-limit'i sert, 1-2'de tutun."""
     browser_args: List[str] = []
+    disable_sandbox: bool = False
+    """Chromium'u --no-sandbox ile calistirir. SON CARE.
+
+    Bu servis uzaktan gelen, kontrol edilmeyen JavaScript'i render ediyor; Chromium'un
+    sandbox'i son savunma hatti. Normalde gerekmez: docker-compose.yml Playwright'in
+    seccomp profilini veriyor ve o profil sandbox'in ihtiyac duydugu clone/unshare
+    cagrilarina izin veriyor. Sandbox hatasi aliyorsaniz once profilin gercekten
+    yuklendigini dogrulayin, bunu acmayi en sona birakin."""
     browser_channel: Optional[str] = "chromium"
     """Hangi Chromium ikilisi kullanilacak. Varsayilan 'chromium' tam tarayiciyi yeni
     headless modunda calistirir; bos birakilirsa Playwright'in 'headless shell' ikilisine
