@@ -3,6 +3,10 @@
 **Google AI Mode (`udm=50`) cevaplarını JSON döndüren, kendi sunucunuzda çalışan API.
 SEO / GEO araştırması için.**
 
+[![CI](https://github.com/TurkerYakup/ai-mode-api/actions/workflows/ci.yml/badge.svg)](https://github.com/TurkerYakup/ai-mode-api/actions/workflows/ci.yml)
+[![Lisans: MIT](https://img.shields.io/badge/lisans-MIT-blue.svg)](LICENSE)
+[![Container](https://img.shields.io/badge/ghcr.io-ai--mode--api-2496ed?logo=docker&logoColor=white)](https://github.com/TurkerYakup/ai-mode-api/pkgs/container/ai-mode-api)
+
 🇬🇧 [English README](README.md)
 
 Google'ın resmî bir AI Mode API'si yok. Bu servis, Docker içinde headless Chromium
@@ -52,9 +56,30 @@ En kıymetli kısım `blocks[].links`: tüm cevap için tek bir düz link listes
 ```bash
 git clone https://github.com/TurkerYakup/ai-mode-api.git
 cd ai-mode-api
-cp .env.example .env          # localhost dışına açacaksanız GAM_API_KEY doldurun
+cp .env.example .env
+```
+
+Anahtar verin — **anahtarsız servis açılmaz**:
+
+```bash
+sed -i "s/^GAM_API_KEY=.*/GAM_API_KEY=$(openssl rand -hex 32)/" .env
+```
+
+Hazır imajı çekin (derleme yok, Chromium ile ~2 GB):
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+Ya da kaynaktan derleyin:
+
+```bash
 docker compose up -d --build
 ```
+
+> Yalnızca localhost'ta çalıştırıyor ve anahtar istemiyor musunuz? `.env` içinde
+> `GAM_ALLOW_NO_AUTH=true` yapın. Bu bilinçli bir muafiyettir ve servis her açılışta
+> uyarı loglar.
 
 ```bash
 curl http://127.0.0.1:8000/health

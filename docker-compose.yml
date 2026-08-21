@@ -1,7 +1,9 @@
 services:
   google-ai-mode-api:
+    # Hazir imaji cekmek icin:  docker compose pull && docker compose up -d
+    # Kaynaktan derlemek icin:  docker compose up -d --build
+    image: ghcr.io/turkeryakup/ai-mode-api:latest
     build: .
-    image: google-ai-mode-api:latest
     container_name: google-ai-mode-api
     restart: unless-stopped
     ports:

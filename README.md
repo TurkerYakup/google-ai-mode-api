@@ -2,6 +2,10 @@
 
 **Self-hosted JSON API for Google's AI Mode (`udm=50`), built for SEO / GEO research.**
 
+[![CI](https://github.com/TurkerYakup/ai-mode-api/actions/workflows/ci.yml/badge.svg)](https://github.com/TurkerYakup/ai-mode-api/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Container](https://img.shields.io/badge/ghcr.io-ai--mode--api-2496ed?logo=docker&logoColor=white)](https://github.com/TurkerYakup/ai-mode-api/pkgs/container/ai-mode-api)
+
 🇹🇷 [Türkçe README](README.tr.md)
 
 Google does not publish an official AI Mode API. This service runs headless Chromium
@@ -51,9 +55,29 @@ instead of dumping one flat link list for the whole answer.
 ```bash
 git clone https://github.com/TurkerYakup/ai-mode-api.git
 cd ai-mode-api
-cp .env.example .env          # set GAM_API_KEY if you expose this beyond localhost
+cp .env.example .env
+```
+
+Set a key — **the service refuses to start without one**:
+
+```bash
+sed -i "s/^GAM_API_KEY=.*/GAM_API_KEY=$(openssl rand -hex 32)/" .env
+```
+
+Then pull the prebuilt image (no build, ~2 GB with Chromium):
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+Or build from source instead:
+
+```bash
 docker compose up -d --build
 ```
+
+> Running on localhost only and don't want a key? Set `GAM_ALLOW_NO_AUTH=true` in `.env`.
+> That is a deliberate opt-out and the service logs a warning on every start.
 
 ```bash
 curl http://127.0.0.1:8000/health
