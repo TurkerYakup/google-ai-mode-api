@@ -290,6 +290,29 @@ delays the threshold but does not remove it. Recovery after a block can take hou
 Practical capacity: **~40 queries per hour** with pauses between clusters. Beyond that you
 need a proxy (`GAM_PROXY_SERVER`).
 
+### The healthcheck does not restart anything
+
+`docker-compose.yml` defines a healthcheck, but `restart: unless-stopped` **does not react
+to health status** — a container that goes unhealthy stays unhealthy and keeps running.
+The healthcheck is a signal for you, not a self-repair mechanism.
+
+Either watch `/health` from outside (Uptime Kuma, a cron curl, your own monitoring), or add
+a supervisor that acts on it:
+
+```yaml
+  autoheal:
+    image: willfarrell/autoheal
+    restart: always
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+```
+
+then label this service with `autoheal: "true"`. Note that most failure modes here are not
+fixed by a restart — `503 blocked` means Google is refusing you, and restarting the
+container will not change that.
+
 ### Memory
 
 Over 44 queries container RSS grows **980 MB → 1.37 GB**. `GAM_PAGE_RECYCLE_AFTER=25`

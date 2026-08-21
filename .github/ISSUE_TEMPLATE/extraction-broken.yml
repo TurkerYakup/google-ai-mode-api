@@ -10,6 +10,19 @@ body:
         Google markup'ını sık değiştiriyor; bu tür raporlar beklenen ve makbul.
 
   - type: input
+    id: version
+    attributes:
+      label: Version / Sürüm
+      description: >-
+        From `GET /health` → `version`. Without it we cannot tell which commit broke,
+        or whether a newer release already fixes it. /
+        `GET /health` çıktısındaki `version`. Bu olmadan hangi sürümde bozulduğunu
+        ya da yeni sürümde düzelmiş olup olmadığını bilemeyiz.
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: input
     id: query
     attributes:
       label: Query / Sorgu

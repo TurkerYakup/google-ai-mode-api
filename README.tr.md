@@ -292,6 +292,29 @@ ama kaldırmaz. Engellendikten sonra toparlanma saatler sürebiliyor.
 Pratik kapasite: **saatte ~40 sorgu**, kümeler arasında ara vererek. Daha fazlası
 için proxy şart (`GAM_PROXY_SERVER`).
 
+### Healthcheck hiçbir şeyi yeniden başlatmaz
+
+`docker-compose.yml` bir healthcheck tanımlıyor ama `restart: unless-stopped` **sağlık
+durumuna bakmaz** — unhealthy olan container öyle kalır ve çalışmaya devam eder.
+Healthcheck size bir sinyaldir, kendi kendini onarma mekanizması değil.
+
+Ya `/health`'i dışarıdan izleyin (Uptime Kuma, cron ile curl, kendi izleme sisteminiz),
+ya da duruma göre hareket eden bir gözetmen ekleyin:
+
+```yaml
+  autoheal:
+    image: willfarrell/autoheal
+    restart: always
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+```
+
+ve bu servise `autoheal: "true"` etiketini verin. Şunu da bilin: buradaki arıza
+biçimlerinin çoğu yeniden başlatmayla düzelmez — `503 blocked` Google'ın sizi
+reddettiği anlamına gelir, container'ı yeniden başlatmak bunu değiştirmez.
+
 ### Bellek
 
 44 sorguda container RAM'i **980 MB → 1.37 GB**'a çıkıyor. `GAM_PAGE_RECYCLE_AFTER=25`
