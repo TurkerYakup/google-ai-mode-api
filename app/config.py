@@ -28,6 +28,18 @@ class Settings(BaseSettings):
     """Bir sekme bu kadar istekte kullanildiktan sonra kapatilip yeniden acilir.
     Chromium renderer RAM'i boylece geri verilir. 0 = kapali (onerilmez)."""
 
+    # --- Proxy ---
+    # Google, veri merkezi ve yogun istek gonderen IP'lere dogrulama ekrani cikarir.
+    # Cikis IP'niz isaretlendiyse tek pratik cozum farkli bir cikis kullanmaktir.
+    proxy_server: Optional[str] = None
+    """Or. 'http://proxy.saglayici.com:8000' veya 'socks5://127.0.0.1:1080'.
+    Kimlik bilgisini BURAYA koymayin; asagidaki alanlari kullanin -- Chromium'un
+    --proxy-server argumani kullanici/sifreyi guvenilir tasimaz."""
+    proxy_username: Optional[str] = None
+    proxy_password: Optional[str] = None
+    proxy_bypass: Optional[str] = None
+    """Virgulle ayrilmis, proxy'siz gidilecek alan adlari. Or. 'localhost,127.0.0.1'."""
+
     # --- Arama ---
     google_domain: str = "www.google.com"
     hl: str = "tr"

@@ -104,11 +104,24 @@ class BrowserSession:
                 ) from exc
             is_mobile = device == "mobile"
 
+            # Playwright'in proxy destegi kimlik dogrulamasini kendisi yapar; ayni seyi
+            # --proxy-server argumaniyla yapmak calismaz.
+            proxy = None
+            if s.proxy_server:
+                proxy = {"server": s.proxy_server}
+                if s.proxy_username:
+                    proxy["username"] = s.proxy_username
+                    proxy["password"] = s.proxy_password or ""
+                if s.proxy_bypass:
+                    proxy["bypass"] = s.proxy_bypass
+                log.info("Proxy kullaniliyor: %s (kimlik: %s)", s.proxy_server, bool(s.proxy_username))
+
             ctx = await self._pw.chromium.launch_persistent_context(
                 user_data_dir=str(profile),
                 headless=s.headless,
                 channel=s.browser_channel or None,
                 args=BASE_ARGS + list(s.browser_args),
+                proxy=proxy,
                 viewport=_VIEWPORTS[device],
                 device_scale_factor=3 if is_mobile else 1,
                 is_mobile=is_mobile,
