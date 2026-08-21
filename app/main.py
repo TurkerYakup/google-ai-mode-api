@@ -27,7 +27,6 @@ from .models import (
     ErrorResponse,
     Link,
     Mode,
-    Mode,
     QueryOptions,
     QueryRequest,
     QueryResult,
@@ -395,3 +394,111 @@ async def debug_screenshot(q: str, device: Device = "desktop") -> dict:
         await asyncio.sleep(6)
         png = await page.screenshot(full_page=True, type="png")
     return {"url": url, "screenshot_base64": base64.b64encode(png).decode("ascii")}
+
+
+# --- uclar: OpenAI uyumlu sohbet -------------------------------------------
+#
+# Amac: AI Mode'u "ucretsiz LLM" gibi kullanmak isteyenlerin Open WebUI, LangChain,
+# Cursor gibi mevcut OpenAI istemcilerini base_url'i buraya cevirerek kullanabilmesi.
+
+MODEL_ID = "google-ai-mode"
+
+
+def _last_user_message(req: ChatRequest) -> str:
+    for msg in reversed(req.messages):
+        if msg.role == "user" and msg.content.strip():
+            return msg.content.strip()
+    raise HTTPException(400, "messages icinde bos olmayan bir 'user' mesaji yok")
+
+
+def _chat_content(result: QueryResult, include_sources: bool) -> str:
+    if not include_sources or not result.citations:
+        return result.answer
+    lines = [result.answer, "", "---", "**Kaynaklar**"]
+    lines += [f"{c.position}. [{c.title or c.domain}]({c.url})" for c in result.citations]
+    return "\n".join(lines)
+
+
+def _tokens(text: str) -> int:
+    """Kaba tahmin; gercek tokenizer yok, sadece OpenAI govdesini doldurmak icin."""
+    return max(1, len(text) // 4)
+
+
+@app.get("/v1/models", tags=["openai"], summary="OpenAI uyumlu model listesi")
+async def list_models() -> dict:
+    return {
+        "object": "list",
+        "data": [{"id": MODEL_ID, "object": "model", "created": 0, "owned_by": "google"}],
+    }
+
+
+@app.post(
+    "/v1/chat/completions",
+    tags=["openai"],
+    summary="OpenAI uyumlu sohbet ucu",
+    description=(
+        "Herhangi bir OpenAI istemcisi base_url'i buraya cevirerek kullanilabilir. "
+        "AI Mode durumsuzdur: sorgu olarak yalnizca son 'user' mesaji gonderilir, "
+        "gecmis baglam tasinmaz. stream=true gercek token akisi degildir -- cevap "
+        "tamamlandiktan sonra parcalara bolunerek gonderilir."
+    ),
+    dependencies=[Depends(require_key)],
+)
+async def chat_completions(req: ChatRequest):
+    query = _last_user_message(req)
+    opts = QueryOptions(
+        hl=req.hl, gl=req.gl, location=req.location, device=req.device,
+        mode="llm", include_blocks=False,
+    )
+    result = await run_query(query, opts)
+    content = _chat_content(result, req.include_sources)
+
+    created = int(time.time())
+    cid = f"chatcmpl-{uuid.uuid4().hex}"
+
+    if not req.stream:
+        return {
+            "id": cid,
+            "object": "chat.completion",
+            "created": created,
+            "model": MODEL_ID,
+            "choices": [
+                {"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}
+            ],
+            "usage": {
+                "prompt_tokens": _tokens(query),
+                "completion_tokens": _tokens(content),
+                "total_tokens": _tokens(query) + _tokens(content),
+            },
+        }
+
+    async def sse() -> AsyncIterator[str]:
+        def chunk(delta: dict, finish: Optional[str] = None) -> str:
+            payload = {
+                "id": cid,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": MODEL_ID,
+                "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+            }
+            return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+        yield chunk({"role": "assistant", "content": ""})
+        step = 60
+        for i in range(0, len(content), step):
+            yield chunk({"content": content[i : i + step]})
+        yield chunk({}, finish="stop")
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(sse(), media_type="text/event-stream")
+
+
+# --- basit web formu -------------------------------------------------------
+
+_INDEX = Path(__file__).parent / "static" / "index.html"
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def playground() -> str:
+    """Tarayicidan hizli deneme icin tek sayfalik form."""
+    return _INDEX.read_text(encoding="utf-8")

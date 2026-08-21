@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Google AI Mode API</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #16181d; --muted: #6b7280; --line: #e3e6ea;
+    --accent: #1a73e8; --card: #f7f8fa; --code: #f1f3f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --fg: #e8eaed; --muted: #9aa0a6; --line: #2b2f36;
+      --accent: #8ab4f8; --card: #1c1f24; --code: #22262c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .sub a { color: var(--accent); }
+  form { display: grid; gap: 12px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > label { flex: 1 1 150px; }
+  label { display: block; font-size: 12px; color: var(--muted); }
+  input, select {
+    width: 100%; margin-top: 4px; padding: 9px 11px; font: inherit;
+    background: var(--bg); color: var(--fg);
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer;
+    background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+    justify-self: start;
+  }
+  button[disabled] { opacity: .55; cursor: default; }
+  #status { font-size: 13px; color: var(--muted); min-height: 20px; margin-top: 14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px 18px; margin-top: 16px;
+  }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
+             color: var(--muted); margin: 0 0 10px; }
+  #answer { white-space: pre-wrap; word-wrap: break-word; }
+  ol.cites { margin: 0; padding-left: 22px; }
+  ol.cites li { margin-bottom: 6px; }
+  ol.cites a { color: var(--accent); text-decoration: none; }
+  ol.cites a:hover { text-decoration: underline; }
+  .dom { color: var(--muted); font-size: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { background: var(--code); border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 14px; }
+  .err { border-color: #d93025; }
+  .err h2 { color: #d93025; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Google AI Mode API</h1>
+  <div class="sub">
+    Hızlı deneme formu. Tüm parametreler için <a href="/docs">/docs</a>.
+  </div>
+
+  <form id="f">
+    <label>Sorgu
+      <input id="q" required placeholder="Bursa yapay zeka firmaları" autofocus>
+    </label>
+
+    <div class="row">
+      <label>Dil (hl)<input id="hl" value="tr" size="4"></label>
+      <label>Ülke (gl)<input id="gl" value="TR" size="4"></label>
+      <label>Konum<input id="location" placeholder="Bursa,Turkey"></label>
+      <label>Cihaz
+        <select id="device"><option>desktop</option><option>mobile</option></select>
+      </label>
+      <label>Mod
+        <select id="mode">
+          <option value="seo">seo — tam analiz</option>
+          <option value="llm">llm — sade cevap</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="row">
+      <label>Takip edilecek domainler<input id="td" placeholder="siteniz.com, rakip.com"></label>
+      <label>Takip edilecek markalar<input id="tb" placeholder="Markanız"></label>
+    </div>
+
+    <label style="flex:0 0 auto">API anahtarı (GAM_API_KEY ayarlıysa)
+      <input id="key" type="password" placeholder="boş bırakılabilir">
+    </label>
+
+    <button id="go">Sorgula</button>
+  </form>
+
+  <div id="status"></div>
+
+  <div id="errBox" class="card err hidden"><h2>Hata</h2><div id="err"></div></div>
+  <div id="answerBox" class="card hidden"><h2>Cevap</h2><div id="answer"></div></div>
+  <div id="trackBox" class="card hidden"><h2>Takip</h2><div id="track"></div></div>
+  <div id="domainBox" class="card hidden"><h2>Domain payı</h2><div id="domains"></div></div>
+  <div id="citeBox" class="card hidden"><h2>Atıflar</h2><ol class="cites" id="cites"></ol></div>
+  <div id="fuBox" class="card hidden"><h2>Devam soruları</h2><div class="chips" id="fu"></div></div>
+  <div id="meta" class="meta"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const list = (s) => s.split(",").map((x) => x.trim()).filter(Boolean);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+let timer = null;
+
+function show(id, on) { $(id).classList.toggle("hidden", !on); }
+
+function reset() {
+  ["errBox", "answerBox", "trackBox", "domainBox", "citeBox", "fuBox"].forEach((b) => show(b, false));
+  $("meta").textContent = "";
+}
+
+function render(d) {
+  // mode=llm sade govde dondurur: answer + sources.
+  const cites = d.citations || (d.sources || []).map((s, i) => ({ ...s, position: i + 1 }));
+
+  $("answer").textContent = d.answer || "(boş)";
+  show("answerBox", true);
+
+  const tracked = [...(d.tracked_domains || []), ...(d.tracked_brands || [])];
+  if (tracked.length) {
+    $("track").innerHTML = tracked.map((t) => {
+      const hit = t.cited ?? t.mentioned;
+      const name = esc(t.domain || t.brand);
+      const detail = t.cited
+        ? `sıra ${t.positions.join(", ")}`
+        : (t.mentioned ? `${t.count} kez geçiyor` : "yok");
+      return `<div>${hit ? "✅" : "❌"} <strong>${name}</strong> <span class="dom">— ${detail}</span></div>`;
+    }).join("");
+    show("trackBox", true);
+  }
+
+  if ((d.domains || []).length) {
+    $("domains").innerHTML =
+      "<table><tr><th>Domain</th><th>Atıf</th><th>Pay</th><th>İlk sıra</th></tr>" +
+      d.domains.map((x) =>
+        `<tr><td>${esc(x.domain)}</td><td>${x.citations}</td>` +
+        `<td>%${(x.share * 100).toFixed(1)}</td><td>${x.first_position}</td></tr>`).join("") +
+      "</table>";
+    show("domainBox", true);
+  }
+
+  if (cites.length) {
+    $("cites").innerHTML = cites.map((c) =>
+      `<li><a href="${esc(c.url)}" target="_blank" rel="noopener noreferrer">${esc(c.title || c.domain)}</a>` +
+      ` <span class="dom">${esc(c.domain)}</span></li>`).join("");
+    show("citeBox", true);
+  }
+
+  if ((d.follow_ups || []).length) {
+    $("fu").innerHTML = d.follow_ups.map((t) => `<span class="chip">${esc(t)}</span>`).join("");
+    show("fuBox", true);
+  }
+
+  const bits = [`${(d.elapsed_ms / 1000).toFixed(1)} sn`];
+  if (d.cached) bits.push("önbellekten");
+  if (d.truncated) bits.push("⚠ cevap akışı tamamlanmadan kesildi");
+  if (d.stats) bits.push(`${d.stats.words} kelime`, `${d.stats.citation_count} atıf`);
+  if (d.extracted_by) bits.push(`ayıklama: ${d.extracted_by}`);
+  $("meta").textContent = bits.join(" · ");
+}
+
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  reset();
+  $("go").disabled = true;
+
+  const t0 = Date.now();
+  $("status").textContent = "Sorgulanıyor… AI Mode cevabı 30-90 sn sürebilir.";
+  timer = setInterval(() => {
+    $("status").textContent = `Sorgulanıyor… ${Math.round((Date.now() - t0) / 1000)} sn`;
+  }, 1000);
+
+  const headers = { "Content-Type": "application/json" };
+  if ($("key").value.trim()) headers["X-API-Key"] = $("key").value.trim();
+
+  try {
+    const res = await fetch("/v1/query", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        query: $("q").value,
+        hl: $("hl").value || null,
+        gl: $("gl").value || null,
+        location: $("location").value || null,
+        device: $("device").value,
+        mode: $("mode").value,
+        track_domains: list($("td").value),
+        track_brands: list($("tb").value),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      $("err").innerHTML =
+        `<strong>${esc(data.code || res.status)}</strong> — ${esc(data.message || data.detail || "bilinmeyen hata")}` +
+        (data.detail && data.message ? `<div class="dom" style="margin-top:6px">${esc(data.detail)}</div>` : "");
+      show("errBox", true);
+    } else {
+      render(data);
+    }
+  } catch (err) {
+    $("err").textContent = "İstek gönderilemedi: " + err;
+    show("errBox", true);
+  } finally {
+    clearInterval(timer);
+    $("status").textContent = "";
+    $("go").disabled = false;
+  }
+});
+</script>
+</body>
+</html>
