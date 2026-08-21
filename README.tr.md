@@ -401,7 +401,7 @@ scripts/login.py  Profili hazırlamak için görünür tarayıcı
 **Issue açmaktan çekinmeyin — bunu ayakta tutmanın en hızlı yolu bu.**
 
 Google markup'ını haber vermeden değiştiriyor; kırılma istisna değil, beklenen durum.
-Selector düzeltmeleri hızlı çıkıyor ve iyi bir hata raporu işin çoğunu hallediyor:
+İyi bir hata raporu işin çoğunu hallediyor:
 
 - **Ayıklama bozulduysa:** sorguyu, `hl`/`gl`/`device` değerlerini ve `extracted_by` alanını
   yazın. `GAM_DEBUG_ENDPOINTS=true` ile alınan `/v1/debug/html` çıktısı çok işe yarar.
@@ -411,6 +411,13 @@ Selector düzeltmeleri hızlı çıkıyor ve iyi bir hata raporu işin çoğunu 
 
 Selector güncellemeleri, yeni ayıklayıcılar ve dil kapsamı için PR'lar açığa. `pytest -q`
 yeşil kalsın yeter.
+
+**Bakım konusunda açık olalım:** bu bir yan proje, SLA'lı bir ürün değil. Kendi işimde
+kullandığım sürece bakımlı kalır. Selector düzeltmeleri öncelikli — onlar olmadan geri
+kalanın anlamı yok; özellik istekleri best-effort. Hata raporuna ekleyebileceğiniz en
+faydalı şey, yakalanmış bir sayfa üzerinden regression testidir
+([`tests/fixtures/`](tests/fixtures/)) — düzeltmeyi tahmin oyunu olmaktan çıkaran şey odur.
+`/health` çıktısındaki sürümü de mutlaka yazın.
 
 ---
 

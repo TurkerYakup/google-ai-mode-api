@@ -23,7 +23,10 @@ log = logging.getLogger(__name__)
 # --no-sandbox BILEREK burada degil. Bu container'in isi tanimi geregi uzaktan gelen,
 # kontrol etmedigimiz JavaScript'i render etmek; Chromium'un kendi sandbox'i son savunma
 # hatti. docker-compose.yml Playwright'in seccomp profilini veriyor, o profil de
-# clone/unshare'e izin verdigi icin sandbox container icinde calisiyor.
+# clone/unshare'e izin verdigi icin sandbox container icinde calisabiliyor.
+#
+# DIKKAT: argumani listeden cikarmak TEK BASINA yetmez. Playwright'in kendi varsayilani
+# chromium_sandbox=False'tur ve bayragi kendisi ekler; asagida acikca True veriyoruz.
 # Zorunlu kalirsaniz GAM_DISABLE_SANDBOX=true var, ama once seccomp profilini kontrol edin.
 BASE_ARGS = [
     "--disable-dev-shm-usage",
@@ -124,9 +127,11 @@ class BrowserSession:
                 user_data_dir=str(profile),
                 headless=s.headless,
                 channel=s.browser_channel or None,
-                args=BASE_ARGS
-                + (["--no-sandbox"] if s.disable_sandbox else [])
-                + list(s.browser_args),
+                args=BASE_ARGS + list(s.browser_args),
+                # Playwright'in varsayilani chromium_sandbox=False, yani ARGUMANI BIZ
+                # vermesek de kendisi --no-sandbox ekliyor. Sandbox'i geri acmak icin
+                # bunu acikca istemek gerekiyor; sadece BASE_ARGS'tan cikarmak yetmez.
+                chromium_sandbox=not s.disable_sandbox,
                 proxy=proxy,
                 viewport=_VIEWPORTS[device],
                 device_scale_factor=3 if is_mobile else 1,

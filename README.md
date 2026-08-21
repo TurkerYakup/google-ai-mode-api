@@ -403,7 +403,7 @@ scripts/login.py  Visible browser for preparing the profile
 **Please open issues — that's the fastest way to keep this working.**
 
 Google changes its markup without warning, so breakage is expected rather than exceptional.
-Selector fixes ship quickly, and a good bug report is most of the work:
+A good bug report is most of the work:
 
 - **Extraction broke?** Include the query, `hl`/`gl`/`device`, and the `extracted_by` value.
   Output from `/v1/debug/html` (with `GAM_DEBUG_ENDPOINTS=true`) helps enormously.
@@ -412,6 +412,13 @@ Selector fixes ship quickly, and a good bug report is most of the work:
 
 Pull requests are welcome for selector updates, new extractors, and language coverage.
 Keep `pytest -q` green.
+
+**On maintenance, plainly:** this is a side project, not a product with an SLA. It stays
+maintained for as long as I use it in my own work. Selector fixes are the priority, since
+without them nothing else matters; feature requests are best effort. A regression test
+against a captured page — see [`tests/fixtures/`](tests/fixtures/) — is the most useful
+thing you can attach to a bug report, and it is what makes a fix quick rather than a
+guessing game. Always include the version from `/health`.
 
 ---
 
