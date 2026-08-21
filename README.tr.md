@@ -137,6 +137,36 @@ paralel gitmek Google'ın doğrulama ekranını çağırmanın en hızlı yoludu
 
 `GAM_API_KEY` doluysa tüm `/v1/*` uçları `X-API-Key` başlığı ister.
 
+### Hatalar
+
+FastAPI'nin kendi hataları dahil **her hata aynı gövdeyle** döner; tek bir şekil işlemeniz
+yeterli:
+
+```json
+{
+  "status": "error",
+  "code": "blocked",
+  "message": "Google bu isteği doğrulama ekranına yönlendirdi (CAPTCHA / olağandışı trafik).",
+  "detail": "İstek hızını düşürün, farklı bir IP kullanın veya profili tarayıcıda elle tazeleyin."
+}
+```
+
+| HTTP | `code` | Ne oldu | Ne yapmalı |
+|---|---|---|---|
+| `400` | `bad_request` | Toplu istek `GAM_MAX_BATCH_SIZE`'ı aştı ya da sohbet isteğinde `user` mesajı yok | İsteği düzeltin |
+| `401` | `unauthorized` | `X-API-Key` eksik veya yanlış | `GAM_API_KEY`'deki anahtarı gönderin |
+| `404` | `not_found` | Bilinmeyen `task_id` ya da debug uçları kapalı | Görev sonuçları `GAM_TASK_RETENTION` sonrası silinir; debug için `GAM_DEBUG_ENDPOINTS=true` |
+| `422` | `validation_error` | Gövde veya parametreler doğrulamadan geçmedi | `detail` alanı alan bazında hataları taşır |
+| `500` | `internal_error` | Beklenmeyen hata | `docker compose logs` |
+| `502` | `no_answer` | Sayfa açıldı ama AI Mode cevabı bulunamadı | Google bazı sorgularda yapay zekâ cevabı üretmez. Her sorguda oluyorsa DOM değişmiştir — `extracted_by` ve `GAM_ANSWER_SELECTORS`'a bakın |
+| `502` | `extract_failed` | Ayıklama betiği sayfa içinde hata verdi | Genelde DOM değişikliği; sorguyla birlikte issue açın |
+| `503` | `blocked` | Google doğrulama ekranı verdi (`/sorry/index`) | **En sık görülen.** Hız tavanına çarptınız — [Ölçülen limitler](#ölçülen-limitler). Bekleyin, yavaşlayın ya da `GAM_PROXY_SERVER` verin |
+| `503` | `browser_unavailable` | Kuyruk süresi içinde boş sekme çıkmadı ya da profil dizini yazılabilir değil | `GAM_POOL_SIZE`'ı artırın ya da volume sahipliğini düzeltin — mesaj hangisi olduğunu söyler |
+| `504` | `navigation_timeout` | Sayfa `GAM_NAV_TIMEOUT` içinde açılmadı | Ağ ya da Google yavaş; tekrar deneyin |
+
+Toplu yanıtlarda her madde kendi hatasını `items[].error` altında aynı `code` / `message`
+ile taşır, toplu isteğin kendisi yine `200` döner.
+
 ---
 
 ## İstek parametreleri
@@ -184,27 +214,36 @@ Tüm ayarlar `GAM_` önekli ortam değişkeni (`.env`). Tam liste: [.env.example
 
 ## Ticari API'lerle karşılaştırma
 
-Bunu gerçekten satan sağlayıcılar var ve çalıştırmak yerine satın almak istiyorsanız makul
-seçenekler. **Ağustos 2026** itibarıyla, kabaca — fiyatları kendiniz doğrulayın:
+Aşağıdaki fiyatlar **22 Ağustos 2026**'da her sağlayıcının kendi fiyat sayfasından okundu.
+Değişirler; güvenmeden önce bağlantılara bakın.
 
-| Sağlayıcı | AI Mode desteği | Yaklaşık fiyat | Model |
+| Sağlayıcı | AI Mode desteği | Fiyat | Model |
 |---|---|---|---|
-| [DataForSEO](https://dataforseo.com/pricing/serp/google-ai-mode-serp-api) | `serp/google/ai_mode`, live + standard (normal/yüksek öncelik), advanced + HTML uçları | **$0.004 / sayfa**'dan (live), $50 minimum yükleme | Kullandıkça öde |
-| [SerpApi](https://serpapi.com/google-ai-mode-api) | `engine=google_ai_mode`; `text_blocks`, `references`, alışveriş/yerel sonuçlar, görsel & video, çok turlu devam soruları, markdown çıktı | 5 000 sorgu için **$75 / ay**'dan, 100 ücretsiz | Abonelik |
-| [Bright Data](https://brightdata.com/blog/web-data/best-serp-apis) | SERP API | ~**$3 / 1 000** sonuç, planlar $499/ay'dan | PAYG + abonelik |
-| [Oxylabs](https://oxylabs.io/blog/best-serp-api) | SERP Scraper API, başarı başına ödeme | ~**$0.80–1.00 / 1 000** | Abonelik kademeleri |
-| **Bu proje** | Yalnızca AI Mode | sadece sunucu maliyeti | Kendi sunucunuzda |
+| [DataForSEO](https://dataforseo.com/pricing/serp/google-ai-mode-serp-api) | AI Mode'a özel SERP API | SERP başına **$0.0012** standart kuyruk (~5 dk), **$0.0024** öncelikli (~1 dk), **$0.004** live (~6 sn) | Kullandıkça öde, [$50 minimum yükleme](https://dataforseo.com/help-center/minimum-payment) (devreder, $1 deneme kredisi) |
+| [SerpApi](https://serpapi.com/google-ai-mode-api) | `engine=google_ai_mode`; `text_blocks`, `references`, `related_questions`, `shopping_results`, `reconstructed_markdown`, çok tur için `subsequent_request_token` | 250 sorgu ücretsiz; **$25** / 1 000, $75 / 5 000, $275 / 30 000, $3 750 / 1 M'e kadar. AI Mode için ek ücret yok | Abonelik, kullandıkça öde seçeneği yok |
+| [Bright Data](https://brightdata.com/pricing/serp) | Genel SERP API — fiyat sayfasında AI Mode belirtilmiyor | **$1.50 / 1 000** PAYG; Scale $499/ay 380 K dahil, sonrası $1.30 / 1 000; ayda 5 K ücretsiz | PAYG + abonelik |
+| [Oxylabs](https://oxylabs.io/products/scraper-api/serp/pricing) | Web Scraper API — AI Mode'a özel ürün bulunamadı | $49 Micro planında Google ~**$1.00 / 1 000**; $99 / $249 kademeleri; başarılı istek başına ücret; 2 K ücretsiz deneme | Abonelik kademeleri |
+| **Bu proje** | Yalnızca AI Mode | Sadece sunucu maliyeti | Kendi sunucunuzda |
 
-**Satın alın** — günde binlerce sorgu, garantili uptime, proxy havuzu ve Google markup'ı
-değiştiğinde arayacak birileri gerekiyorsa.
+### Maliyet argümanı konusunda dürüst olalım
 
-**Bunu çalıştırın** — günde birkaç yüz sorgu yetiyorsa, ham HTML ve ekran görüntüsü
-istiyorsanız, kendi metriklerinizi eklemek istiyorsanız ya da sorgu başına fatura
-istemiyorsanız. Proxy havuzu yok, SLA yok, tek IP var.
+DataForSEO'nun standart kuyruğunda 1 000 AI Mode sayfası **$1.20**. Bu projenin ölçülen
+tavanı tek residential IP'de saatte ~40 sorgu — günde ~960, ki bunu yaklaşık **günde $1.15**'e
+satın alabilirsiniz. Yani *bunu çalıştırmanın sebebi maliyet değil.*
 
-Yol haritasında, yukarıdaki sağlayıcılardan açıkça ödünç alınanlar: tek oturumda çok turlu
-devam soruları, alışveriş / yerel / video bloklarının ayıklanması ve token açısından verimli
-`output=md` yanıt biçimi.
+Ayakta duran sebepler:
+
+- **Sorgularınız makinenizden çıkmıyor.** Müşteri markası takip ediyorsanız önemli.
+- **`blocks[].links` atıfları tek tek iddialara bağlıyor.** Sağlayıcılar düz bir kaynak
+  listesi döndürür; burada hangi cümlenin hangi kaynağa dayandığı eşleşir.
+- **GEO metrikleri hazır geliyor** — domain payı, bağlamıyla marka geçişleri, domain takibi.
+  Diğerlerinde SERP'i parse edip bunları kendiniz hesaplarsınız.
+- **OpenAI uyumlu uç.** Open WebUI, LangChain ya da Cursor'u `/v1`'e yöneltip AI Mode'u
+  sohbet modeli gibi kullanabilirsiniz. Hiçbir SERP sağlayıcısında bu yok.
+- **Minimum yok, abonelik yok, sorgu başına fatura yok.**
+
+**Satın alın** — hacim, garantili uptime, proxy havuzu, doğrulanmış konum hedefleme ya da
+Google markup'ı değiştiğinde arayacak birileri gerekiyorsa.
 
 ---
 

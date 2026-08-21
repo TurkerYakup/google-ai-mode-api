@@ -136,6 +136,36 @@ firing them in parallel is the fastest way to get a verification page from Googl
 
 When `GAM_API_KEY` is set, every `/v1/*` route requires an `X-API-Key` header.
 
+### Errors
+
+Every error — including FastAPI's own — comes back in the same shape, so you only need to
+handle one:
+
+```json
+{
+  "status": "error",
+  "code": "blocked",
+  "message": "Google routed this request to a verification page (CAPTCHA / unusual traffic).",
+  "detail": "Slow down, use a different IP, or refresh the profile in a real browser."
+}
+```
+
+| HTTP | `code` | What happened | What to do |
+|---|---|---|---|
+| `400` | `bad_request` | Batch larger than `GAM_MAX_BATCH_SIZE`, or no `user` message in a chat request | Fix the request |
+| `401` | `unauthorized` | Missing or wrong `X-API-Key` | Send the key set in `GAM_API_KEY` |
+| `404` | `not_found` | Unknown `task_id`, or debug endpoints disabled | Task results expire after `GAM_TASK_RETENTION`; for debug set `GAM_DEBUG_ENDPOINTS=true` |
+| `422` | `validation_error` | Body or query parameters failed validation | `detail` carries the field-level errors |
+| `500` | `internal_error` | Unexpected failure | Check `docker compose logs` |
+| `502` | `no_answer` | The page loaded but no AI Mode answer was found | Google skips the AI answer for some queries. If it happens for every query, Google's DOM likely changed — see `extracted_by` and `GAM_ANSWER_SELECTORS` |
+| `502` | `extract_failed` | The extraction script threw inside the page | Usually a DOM change; open an issue with the query |
+| `503` | `blocked` | Google served a verification page (`/sorry/index`) | **The common one.** You hit the rate ceiling — see [Measured limits](#measured-limits). Wait, slow down, or set `GAM_PROXY_SERVER` |
+| `503` | `browser_unavailable` | No free tab within the queue timeout, or the profile directory is not writable | Raise `GAM_POOL_SIZE`, or fix volume ownership — the message says which |
+| `504` | `navigation_timeout` | The page did not load within `GAM_NAV_TIMEOUT` | Network or Google being slow; retry |
+
+In batch responses each item carries its own error under `items[].error` with the same
+`code` / `message`, and the batch itself still returns `200`.
+
 ---
 
 ## Request parameters
@@ -183,27 +213,36 @@ Everything is a `GAM_`-prefixed environment variable (`.env`). Full list in
 
 ## How this compares to commercial APIs
 
-There are real vendors selling exactly this, and they are a reasonable choice if you'd
-rather buy than run. Roughly, as of **August 2026** — verify current pricing yourself:
+Prices below were read from each vendor's own pricing page on **22 August 2026**. They
+change; check the links before you rely on them.
 
-| Provider | AI Mode support | Indicative price | Model |
+| Provider | AI Mode support | Price | Model |
 |---|---|---|---|
-| [DataForSEO](https://dataforseo.com/pricing/serp/google-ai-mode-serp-api) | `serp/google/ai_mode`, live + standard (normal/high priority), advanced + HTML endpoints | from **$0.004 / page** (live), $50 minimum top-up | Pay as you go |
-| [SerpApi](https://serpapi.com/google-ai-mode-api) | `engine=google_ai_mode`; `text_blocks`, `references`, shopping/local results, inline images & videos, multi-turn follow-ups, markdown output | from **$75 / mo** for 5 000 searches, 100 free | Subscription |
-| [Bright Data](https://brightdata.com/blog/web-data/best-serp-apis) | SERP API | ~**$3 / 1 000** results, plans from $499/mo | PAYG + subscription |
-| [Oxylabs](https://oxylabs.io/blog/best-serp-api) | SERP Scraper API, pay-per-success | ~**$0.80–1.00 / 1 000** | Subscription tiers |
-| **This project** | AI Mode only | infrastructure cost only | Self-hosted |
+| [DataForSEO](https://dataforseo.com/pricing/serp/google-ai-mode-serp-api) | Dedicated AI Mode SERP API | **$0.0012** / SERP standard queue (~5 min), **$0.0024** priority (~1 min), **$0.004** live (~6 s) | Pay as you go, [$50 minimum deposit](https://dataforseo.com/help-center/minimum-payment) (rolls over, $1 trial credit) |
+| [SerpApi](https://serpapi.com/google-ai-mode-api) | `engine=google_ai_mode`; `text_blocks`, `references`, `related_questions`, `shopping_results`, `reconstructed_markdown`, `subsequent_request_token` for multi-turn | 250 searches free; **$25** / 1 000, $75 / 5 000, $275 / 30 000, up to $3 750 / 1 M. No separate AI Mode surcharge | Subscription, no pay-as-you-go |
+| [Bright Data](https://brightdata.com/pricing/serp) | General SERP API — AI Mode not documented on the pricing page | **$1.50 / 1 000** PAYG; Scale $499/mo incl. 380 K then $1.30 / 1 000; 5 K/mo free | PAYG + subscription |
+| [Oxylabs](https://oxylabs.io/products/scraper-api/serp/pricing) | Web Scraper API — no dedicated AI Mode product found | Google ~**$1.00 / 1 000** on the $49 Micro plan; $99 / $249 tiers; billed per successful request; 2 K free trial | Subscription tiers |
+| **This project** | AI Mode only | Infrastructure cost only | Self-hosted |
 
-**Buy instead of running this if** you need thousands of queries a day, guaranteed uptime,
-a proxy pool, and someone to call when Google changes its markup.
+### Be honest about the cost argument
 
-**Run this if** you want a few hundred queries a day for your own research, want the raw
-HTML and screenshots, want to add your own metrics, or simply don't want a per-query bill.
-It has no proxy pool, no SLA, and one IP address.
+At DataForSEO's standard queue, 1 000 AI Mode pages cost **$1.20**. This project's measured
+ceiling is ~40 queries/hour on one residential IP — about 960/day, which you could simply
+buy for roughly **$1.15/day**. So *cost is not the reason to run this.*
 
-Features on the roadmap, openly borrowed from the vendors above: multi-turn follow-ups in a
-single session, extraction of shopping / local / video blocks, and a token-efficient
-`output=md` response format.
+The reasons that do hold up:
+
+- **Your queries never leave your machine.** Relevant if you track client brands.
+- **`blocks[].links` maps citations to individual claims.** Vendors return a flat reference
+  list; this maps which sentence cites which source.
+- **GEO metrics ship built in** — domain share of voice, brand mentions with context,
+  tracked domains. Elsewhere you parse the SERP and compute these yourself.
+- **An OpenAI-compatible endpoint.** Point Open WebUI, LangChain or Cursor at `/v1` and use
+  AI Mode as a chat model. No SERP vendor offers this.
+- **No minimum, no subscription, no per-query bill.**
+
+**Buy instead if** you need volume, guaranteed uptime, a proxy pool, validated location
+targeting, or someone to call when Google changes its markup.
 
 ---
 

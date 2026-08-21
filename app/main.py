@@ -10,7 +10,9 @@ from typing import AsyncIterator, List, Optional, Union
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__
 from .analysis import track_brands, track_domains
@@ -198,6 +200,41 @@ async def _browser_error_handler(_: Request, exc: BrowserUnavailable) -> JSONRes
     return JSONResponse(
         status_code=503,
         content=ErrorResponse(code="browser_unavailable", message=str(exc)).model_dump(),
+    )
+
+
+# FastAPI'nin kendi hatalari {"detail": ...} dondurur; bizimkiler
+# {"status","code","message"}. Entegre edenin tek bir sekil gormesi icin hepsini
+# ayni govdeye ceviriyoruz.
+_HTTP_CODES = {
+    400: "bad_request",
+    401: "unauthorized",
+    404: "not_found",
+    405: "method_not_allowed",
+    422: "validation_error",
+}
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_error_handler(_: Request, exc: StarletteHTTPException) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorResponse(
+            code=_HTTP_CODES.get(exc.status_code, "http_error"), message=str(exc.detail)
+        ).model_dump(),
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content=ErrorResponse(
+            code="validation_error",
+            message="Istek govdesi ya da parametreleri gecersiz.",
+            detail=json.dumps(exc.errors(), ensure_ascii=False, default=str),
+        ).model_dump(),
     )
 
 

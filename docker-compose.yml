@@ -21,6 +21,13 @@ services:
       - seccomp=unconfined
     # Kacak bir Chromium surecinin host'u bogmamasi icin ust sinir.
     mem_limit: 2g
+    # Docker'in json-file surucusu varsayilan olarak SINIRSIZ buyur. Her istek
+    # loglandigi icin uzun calisan kurulumda disk doldurur. 30 MB'da tutuyoruz.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   profile:
