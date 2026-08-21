@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: "Question or idea / Soru veya fikir"
-    url: https://github.com/TurkerYakup/google-ai-mode-api/discussions
+    url: https://github.com/TurkerYakup/ai-mode-api/discussions
     about: "Not sure it's a bug? Ask here. / Hata mı emin değilseniz buradan sorun."

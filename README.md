@@ -49,8 +49,8 @@ instead of dumping one flat link list for the whole answer.
 ## Quick start
 
 ```bash
-git clone https://github.com/TurkerYakup/google-ai-mode-api.git
-cd google-ai-mode-api
+git clone https://github.com/TurkerYakup/ai-mode-api.git
+cd ai-mode-api
 cp .env.example .env          # set GAM_API_KEY if you expose this beyond localhost
 docker compose up -d --build
 ```

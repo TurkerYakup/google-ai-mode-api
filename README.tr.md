@@ -50,8 +50,8 @@ En kıymetli kısım `blocks[].links`: tüm cevap için tek bir düz link listes
 ## Hızlı başlangıç
 
 ```bash
-git clone https://github.com/TurkerYakup/google-ai-mode-api.git
-cd google-ai-mode-api
+git clone https://github.com/TurkerYakup/ai-mode-api.git
+cd ai-mode-api
 cp .env.example .env          # localhost dışına açacaksanız GAM_API_KEY doldurun
 docker compose up -d --build
 ```
