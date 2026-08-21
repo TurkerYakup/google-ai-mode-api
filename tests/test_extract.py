@@ -26,43 +26,56 @@ SELECTORS = [
 ]
 
 
+FIXTURE_URL = "https://www.google.com/search?q=test&udm=50"
+
+
 @pytest.fixture(scope="session")
-def page():
+def extract():
+    """Fixture'i gercek bir google.com URL'inde sunan ve extract.js'i calistiran yardimci.
+
+    set_content yerine route ile sunuyoruz ki sayfanin origin'i uretimdekiyle ayni olsun
+    ve goreli linkler (/url?q=...) ayni sekilde cozulsun. route.fulfill yaniti yerel
+    uretir -- Google'a cikan bir istek YOKTUR.
+
+    Tek bir route handler kaydedip icerigi 'holder' uzerinden degistiriyoruz. Her
+    cagride yeniden route/unroute yapmak handler birikmesine ve bir fixture'in
+    icerigenin digerine servis edilmesine yol aciyordu.
+    """
     with sync_api.sync_playwright() as pw:
         try:
             browser = pw.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
         except Exception as exc:  # tarayici indirilmemis olabilir
             pytest.skip(f"Chromium baslatilamadi ({exc}); `playwright install chromium` gerekiyor")
-        ctx = browser.new_context(viewport={"width": 1440, "height": 900})
-        yield ctx.new_page()
+
+        page = browser.new_context(viewport={"width": 1440, "height": 900}).new_page()
+        holder = {"html": ""}
+        page.route(
+            "**/*",
+            lambda route: route.fulfill(
+                status=200,
+                content_type="text/html; charset=utf-8",
+                # Onbelleklenirse ikinci cagride route handler hic calismaz ve
+                # onceki fixture'in HTML'i servis edilir.
+                headers={"cache-control": "no-store, no-cache, must-revalidate"},
+                body=holder["html"],
+            ),
+        )
+        counter = {"n": 0}
+
+        def run(path: Path) -> dict:
+            holder["html"] = Path(path).read_text(encoding="utf-8")
+            counter["n"] += 1
+            # URL'i de degistiriyoruz: no-store'a ek ikinci bir onbellek guvencesi.
+            page.goto(f"{FIXTURE_URL}&_n={counter['n']}", wait_until="domcontentloaded")
+            return page.evaluate(EXTRACT_JS, {"selectors": SELECTORS, "includeHtml": False})
+
+        yield run
         browser.close()
 
 
-FIXTURE_URL = "https://www.google.com/search?q=test&udm=50"
-
-
-def extract(page, path: Path) -> dict:
-    """Fixture'i gercek bir google.com URL'inde sunar ve extract.js'i uzerinde calistirir.
-
-    set_content yerine route ile sunuyoruz: sayfanin origin'i uretimdekiyle ayni olsun,
-    boylece goreli linkler (/url?q=...) ayni sekilde cozulsun. route.fulfill yaniti
-    yerel uretir -- Google'a cikan bir istek YOKTUR.
-    """
-    html = path.read_text(encoding="utf-8")
-    page.route(
-        "**/*",
-        lambda route: route.fulfill(status=200, content_type="text/html; charset=utf-8", body=html),
-    )
-    try:
-        page.goto(FIXTURE_URL, wait_until="domcontentloaded")
-        return page.evaluate(EXTRACT_JS, {"selectors": SELECTORS, "includeHtml": False})
-    finally:
-        page.unroute("**/*")
-
-
 @pytest.fixture(scope="session")
-def synthetic(page):
-    return extract(page, Path(__file__).parent / "fixtures" / "synthetic_ai_mode.html")
+def synthetic(extract):
+    return extract(Path(__file__).parent / "fixtures" / "synthetic_ai_mode.html")
 
 
 # --- her fixture icin gecerli olmasi gereken kurallar ----------------------
@@ -70,14 +83,14 @@ def synthetic(page):
 
 @pytest.mark.parametrize("path", FIXTURES, ids=lambda p: p.stem)
 class TestAnyFixture:
-    def test_extraction_succeeds(self, page, path):
-        r = extract(page, path)
+    def test_extraction_succeeds(self, extract, path):
+        r = extract(path)
         assert r["ok"] is True, f"ayiklama basarisiz: {r.get('reason')}"
         assert r["markdown"].strip(), "markdown bos"
         assert r["blocks"], "hic blok uretilmedi"
 
-    def test_blocks_are_well_formed(self, page, path):
-        r = extract(page, path)
+    def test_blocks_are_well_formed(self, extract, path):
+        r = extract(path)
         allowed = {"heading", "paragraph", "list", "table", "code"}
         for b in r["blocks"]:
             assert b["type"] in allowed, f"bilinmeyen blok tipi: {b['type']}"
@@ -86,8 +99,8 @@ class TestAnyFixture:
             if b["type"] == "table":
                 assert b["rows"], "bos tablo blogu"
 
-    def test_citations_are_clean(self, page, path):
-        r = extract(page, path)
+    def test_citations_are_clean(self, extract, path):
+        r = extract(path)
         urls = [c["url"] for c in r["citations"]]
         assert len(urls) == len(set(urls)), "atiflarda tekrar eden URL var"
         for c in r["citations"]:
@@ -96,24 +109,62 @@ class TestAnyFixture:
             assert not c["domain"].endswith("google.com"), f"Google linki atif sayilmis: {c['url']}"
             assert not c["domain"].startswith("www."), f"www. soyulmamis: {c['domain']}"
 
-    def test_follow_ups_are_questions(self, page, path):
-        r = extract(page, path)
+    def test_follow_ups_are_questions(self, extract, path):
+        r = extract(path)
         for q in r["follow_ups"]:
             assert q.endswith(("?", "？")), f"soru olmayan devam onerisi: {q}"
             assert "\n" not in q
 
-    def test_paragraphs_are_single_line(self, page, path):
+    def test_paragraphs_are_single_line(self, extract, path):
         # Kaynak HTML'indeki girinti/satir sonlari metne sizmamali.
-        for b in extract(page, path)["blocks"]:
+        for b in extract(path)["blocks"]:
             if b["type"] == "paragraph":
                 assert "\n" not in b["text"], f"paragrafta ham satir sonu: {b['text'][:60]!r}"
 
-    def test_result_is_json_serializable(self, page, path):
+    def test_result_is_json_serializable(self, extract, path):
         # Sonuc dogrudan API yanitina giriyor; serilestirilemeyen bir sey kalmamali.
-        json.dumps(extract(page, path))
+        json.dumps(extract(path))
 
 
 # --- sentetik fixture'a ozel, birebir beklentiler --------------------------
+
+
+REAL = Path(__file__).parent / "fixtures" / "real_ai_mode_tr.html"
+
+
+@pytest.fixture(scope="session")
+def real(extract):
+    return extract(REAL)
+
+
+@pytest.mark.skipif(not REAL.exists(), reason="gercek fixture yok")
+class TestRealFixture:
+    """Gercek bir AI Mode sayfasi (tr, 'en iyi crm yazilimi'). Asil kirilgan katman bu:
+    Google DOM'u degistiginde ilk burasi kirilir."""
+
+    def test_primary_selector_still_matches_google(self, real):
+        # Bu kirilirsa GAM_ANSWER_SELECTORS guncellenmeli.
+        assert real["how"] == 'selector:div[data-subtree="aimc"]'
+
+    def test_answer_has_substance(self, real):
+        assert len(real["markdown"]) > 1000
+        assert "Salesforce" in real["markdown"]
+        assert "HubSpot" in real["markdown"]
+
+    def test_google_ui_chrome_is_not_in_answer(self, real):
+        md = real["markdown"]
+        for noise in ("Herkese açık bağlantı", "Arama Sonuçları", "Geri bildirim"):
+            assert noise not in md, f"Google arayuz metni cevaba sizmis: {noise}"
+
+    def test_citations_extracted(self, real):
+        domains = {c["domain"] for c in real["citations"]}
+        assert len(real["citations"]) >= 5
+        assert "bitrix24.com.tr" in domains
+
+    def test_block_level_neighbours_are_separated(self, real):
+        """Regression: blok komsulari ayirici olmadan birlestiriliyordu."""
+        assert "TürkiyeBitrix24" not in real["markdown"]
+        assert "karmaşı...Kickidler" not in real["markdown"]
 
 
 class TestSyntheticFixture:

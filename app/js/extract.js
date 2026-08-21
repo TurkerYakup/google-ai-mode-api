@@ -83,7 +83,15 @@
       if (tag === "strong" || tag === "b") out += "**" + inner.trim() + "**";
       else if (tag === "em" || tag === "i") out += "_" + inner.trim() + "_";
       else if (tag === "code") out += "`" + inner.trim() + "`";
-      else out += inner;
+      else {
+        // Blok seviyesindeki komsular gorsel olarak ayri satirlar; ayirici koymazsak
+        // metinleri birbirine yapisiyor ("...TurkiyeBitrix24, dunya capinda...").
+        const display = getComputedStyle(n).display;
+        const isBlock = display && !display.startsWith("inline") && display !== "contents";
+        if (isBlock && out && !/\s$/.test(out)) out += " ";
+        out += inner;
+        if (isBlock) out += " ";
+      }
     }
     return out;
   };
