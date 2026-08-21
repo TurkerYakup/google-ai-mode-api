@@ -313,6 +313,17 @@ By design, and stated plainly:
 
 ## Maintaining the browser profile
 
+> ### ⚠️ Do not sign in with your own Google account
+>
+> **The account is a bigger risk than the IP.** This profile is then used for continuous
+> automation. If you prepare it while signed in, Google ties the traffic to the **account**
+> rather than the IP. An IP block clears in hours — **an account suspension does not**, and
+> the appeal process is painful.
+>
+> Stay **signed out.** This service does not need a session; every verified measurement here
+> was taken signed out. If you truly need one, use a throwaway account created for this
+> purpose only — never your real one.
+
 Cookies and session state live in the `profile` Docker volume, under
 `/data/profile/{desktop,mobile}`. A named volume is used so the image's `app:app`
 ownership carries over — the app does not run as root and could not write to a fresh

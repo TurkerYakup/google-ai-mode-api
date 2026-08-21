@@ -1,9 +1,17 @@
 """Tarayici profilini elle hazirlamak icin gorunur (headful) Chromium acar.
 
+!!! KENDI GOOGLE HESABINIZLA GIRIS YAPMAYIN !!!
+
+  Bu profil sonrasinda surekli otomasyon icin kullanilir. Oturum acikken calistirirsaniz
+  Google trafigi IP'ye degil HESABA baglar; hesap askiya alinmasi kalicidir ve itiraz
+  sureci sancilidir. IP engeli birkac saatte gecer, hesap kaybi gecmez.
+
+  Dogrusu: oturum KAPALI kalin. Illa oturum gerekiyorsa bu is icin acilmis,
+  kaybi onemsiz, tek kullanimlik bir hesap kullanin -- asil hesabinizi asla.
+
 Ne zaman lazim olur:
   * Cerez onay ekrani otomatik kapanmadiysa
   * Google dogrulama ekrani ("olagandisi trafik") cikip API 503 donuyorsa
-  * AI Mode'u kendi Google hesabinizla sorgulamak istiyorsaniz
 
 Ekrani olan bir makinede calistirin (container'da ekran yok):
 

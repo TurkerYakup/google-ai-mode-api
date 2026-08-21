@@ -9,7 +9,14 @@ class Settings(BaseSettings):
 
     # --- HTTP ---
     api_key: Optional[str] = None
-    """X-API-Key ile korunur. Bos birakilirsa kimlik dogrulama kapalidir."""
+    """X-API-Key ile korunur. Bos birakilirsa servis ACILMAZ -- bkz. allow_no_auth."""
+    allow_no_auth: bool = False
+    """Kimlik dogrulamasiz calistirmaya bilincli muafiyet. Sadece servisin disariya
+    kapali oldugundan eminseniz (or. compose'da 127.0.0.1'e bagli) true yapin.
+
+    Not: container icinde uygulama her zaman 0.0.0.0'a baglanir; disariya acik olup
+    olmadigini Docker'in port yayinlamasi belirler ve uygulama bunu goremez. Bu yuzden
+    bind adresine bakan bir kontrol yerine "anahtar yoksa acilma" kurali kullaniliyor."""
     debug_endpoints: bool = False
     """/v1/debug/* uclarini acar (ham HTML + ekran goruntusu). Sadece gelistirme icin."""
 

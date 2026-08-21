@@ -313,6 +313,16 @@ Tasarım gereği, açıkça:
 
 ## Profil bakımı
 
+> ### ⚠️ Kendi Google hesabınızla giriş yapmayın
+>
+> **En büyük risk IP değil, hesap.** Profil sürekli otomasyon için kullanılıyor; oturum
+> açıkken çalıştırırsanız Google trafiği IP'ye değil **hesaba** bağlar. IP engeli birkaç
+> saatte geçer — **hesap askıya alınması kalıcıdır** ve itiraz süreci sancılıdır.
+>
+> Doğrusu: **oturum kapalı kalın.** Bu servis oturum gerektirmiyor; doğrulanmış tüm
+> ölçümler oturum kapalı yapıldı. İlla gerekiyorsa yalnızca bu iş için açılmış,
+> kaybı önemsiz, tek kullanımlık bir hesap kullanın — asıl hesabınızı asla.
+
 Çerezler ve oturum `profile` adlı Docker volume'unda, `/data/profile/{desktop,mobile}`
 altında durur. Adlandırılmış volume kullanılıyor: imajdaki `app:app` sahipliği böylece
 korunuyor — uygulama root olarak çalışmadığı için taze bir bind mount dizinine yazamazdı.

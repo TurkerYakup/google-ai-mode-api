@@ -160,8 +160,32 @@ queue = TaskQueue(
 # --- uygulama --------------------------------------------------------------
 
 
+def _enforce_auth_policy(s: Settings) -> None:
+    """Anahtarsiz calismayi bilincli bir tercihe donusturur.
+
+    Container icinde bind adresi her zaman 0.0.0.0 oldugu icin "localhost'a bagli mi"
+    sorusunu uygulama cevaplayamaz; disariya aciklik Docker'in port yayinlamasinda
+    belirlenir. O yuzden kontrol bind adresinde degil burada: anahtar yoksa acilmiyoruz.
+    """
+    if s.api_key:
+        return
+    if not s.allow_no_auth:
+        raise RuntimeError(
+            "GAM_API_KEY bos. Kimlik dogrulamasiz baslatmiyorum.\n"
+            "  * Onerilen: GAM_API_KEY'e uzun ve rastgele bir deger verin.\n"
+            "  * Servis gercekten disariya kapaliysa (compose'da 127.0.0.1'e bagliysa) "
+            "GAM_ALLOW_NO_AUTH=true ile bu kontrolu bilincli olarak kapatabilirsiniz."
+        )
+    log.warning(
+        "KIMLIK DOGRULAMA KAPALI (GAM_ALLOW_NO_AUTH=true). Bu servis Chromium calistiriyor; "
+        "erisebilen herkes sizin IP'nizden istedigi sorguyu atabilir. Portu disariya "
+        "acmadan once GAM_API_KEY verin."
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _enforce_auth_policy(settings)
     await browser.start()
     await queue.start()
     log.info("API hazir (v%s)", __version__)
