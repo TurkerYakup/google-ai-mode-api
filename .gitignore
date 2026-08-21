@@ -1,0 +1,15 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Tarayici profili ve calisma ciktilari
+data/
+profile/
+*.log
+*.png
+!docs/*.png

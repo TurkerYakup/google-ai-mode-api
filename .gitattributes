@@ -1,0 +1,3 @@
+# Linux container'da CRLF sorun cikarmasin diye tum metin dosyalari LF.
+* text=auto eol=lf
+*.png binary

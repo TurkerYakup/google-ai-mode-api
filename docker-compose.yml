@@ -1,0 +1,18 @@
+services:
+  google-ai-mode-api:
+    build: .
+    image: google-ai-mode-api:latest
+    container_name: google-ai-mode-api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Cerezler/oturum burada kalir; silinirse onay ekrani bastan cikar.
+      # Bind mount, cunku scripts/login.py ile ayni profili host'ta acabilesiniz.
+      - ./data/profile:/data/profile
+    # Chromium paylasimli bellek olmadan sekme cokerttir.
+    shm_size: "1gb"
+    security_opt:
+      - seccomp=unconfined
