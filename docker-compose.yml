@@ -9,10 +9,18 @@ services:
     env_file:
       - .env
     volumes:
-      # Cerezler/oturum burada kalir; silinirse onay ekrani bastan cikar.
-      # Bind mount, cunku scripts/login.py ile ayni profili host'ta acabilesiniz.
-      - ./data/profile:/data/profile
+      # Cerezler/oturum burada kalir. Adlandirilmis volume kullaniyoruz: Docker ilk
+      # olusturmada imajdaki sahipligi (app:app) kopyalar, boylece container root
+      # olmadan yazabilir. Bind mount'a gecerseniz (`./data/profile:/data/profile`)
+      # dizini once host'ta olusturup `chown -R 1000:1000 ./data` yapmalisiniz --
+      # aksi halde uygulama profil dizinini yaratamaz ve baslamaz.
+      - profile:/data/profile
     # Chromium paylasimli bellek olmadan sekme cokerttir.
     shm_size: "1gb"
     security_opt:
       - seccomp=unconfined
+    # Kacak bir Chromium surecinin host'u bogmamasi icin ust sinir.
+    mem_limit: 2g
+
+volumes:
+  profile:

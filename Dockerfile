@@ -17,13 +17,16 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && playwright install --with-deps chromium \
     && rm -rf /var/lib/apt/lists/*
 
-COPY app ./app
-COPY scripts ./scripts
-
-# Chromium'u root olarak calistirmamak icin ayri kullanici; profil dizini volume olur.
+# Kullaniciyi kaynak kodundan ONCE olustur: boylece uygulama degistiginde sadece
+# asagidaki kucuk COPY katmanlari yeniden kurulur. /ms-playwright'i chown'lamiyoruz;
+# tarayici dosyalari zaten herkes tarafindan okunabilir ve o katman ~500 MB.
 RUN useradd --create-home --uid 1000 app \
     && mkdir -p /data/profile \
-    && chown -R app:app /data /ms-playwright /srv
+    && chown -R app:app /data /srv
+
+COPY --chown=app:app app ./app
+COPY --chown=app:app scripts ./scripts
+
 USER app
 
 EXPOSE 8000

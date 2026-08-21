@@ -93,7 +93,15 @@ class BrowserSession:
 
             s = self._s
             profile = Path(s.profile_dir) / device
-            profile.mkdir(parents=True, exist_ok=True)
+            try:
+                profile.mkdir(parents=True, exist_ok=True)
+            except PermissionError as exc:
+                raise BrowserUnavailable(
+                    f"Profil dizini yazilamiyor: {profile}. Bind mount kullaniyorsaniz "
+                    f"host'taki dizini olusturup sahibini uid 1000 yapin "
+                    f"(`mkdir -p data/profile && chown -R 1000:1000 data`), ya da "
+                    f"docker-compose.yml'deki adlandirilmis volume'u kullanin."
+                ) from exc
             is_mobile = device == "mobile"
 
             ctx = await self._pw.chromium.launch_persistent_context(
