@@ -61,7 +61,7 @@
   const root = found.el;
 
   // --- yardimcilar -------------------------------------------------------
-  const clean = (s) => s.replace(/ /g, " ").replace(/[ \t]+/g, " ").trim();
+  const clean = (s) => s.replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").trim();
 
   const inline = (node) => {
     let out = "";
@@ -121,8 +121,9 @@
         for (const li of el.children) {
           if (li.tagName.toLowerCase() !== "li") continue;
           const nested = li.querySelector(":scope > ul, :scope > ol");
-          const text = clean(inline(nested ? withoutNested(li) : li));
-          if (text) items.push({ text, links: linksIn(nested ? withoutNested(li) : li), depth });
+          const src = nested ? withoutNested(li) : li;
+          const text = clean(inline(src));
+          if (text) items.push({ text, links: linksIn(src), depth });
           if (nested) walk(li, depth + 1);
         }
         if (items.length) blocks.push({ type: "list", ordered: tag === "ol", items, links: linksIn(el) });
