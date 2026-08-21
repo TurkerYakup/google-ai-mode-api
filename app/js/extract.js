@@ -18,9 +18,14 @@
     return st.visibility !== "hidden" && st.display !== "none";
   };
 
+  // Goreli linkleri cozmek icin taban. location.origin bazi baglamlarda (file://,
+  // set_content ile yuklenen sayfa) "null" olur ve URL yapicisi taban gecersiz diye
+  // ATAR -- bu da mutlak linkler dahil tum atiflarin sessizce dusmesine yol acar.
+  const BASE = location.origin && location.origin !== "null" ? location.origin : "https://www.google.com";
+
   const unwrap = (href) => {
     try {
-      const u = new URL(href, location.origin);
+      const u = new URL(href, BASE);
       if (u.pathname === "/url" && u.searchParams.get("q")) return u.searchParams.get("q");
       if (u.hostname.endsWith("google.com") && u.searchParams.get("url")) return u.searchParams.get("url");
       return u.href;
@@ -66,7 +71,9 @@
   const inline = (node) => {
     let out = "";
     for (const n of node.childNodes) {
-      if (n.nodeType === Node.TEXT_NODE) { out += n.nodeValue; continue; }
+      // Kaynak kodundaki girinti/satir sonlari metne sizmasin; gercek satir sonu
+      // yalnizca <br> ile gelir.
+      if (n.nodeType === Node.TEXT_NODE) { out += n.nodeValue.replace(/\s+/g, " "); continue; }
       if (n.nodeType !== Node.ELEMENT_NODE) continue;
       if (n.matches && n.matches(NOISE)) continue;
       const tag = n.tagName.toLowerCase();
@@ -117,15 +124,20 @@
         if (text) blocks.push({ type: "paragraph", text, links: linksIn(el) });
 
       } else if (tag === "ul" || tag === "ol") {
+        // Ic ice listeler tek bir blokta, 'depth' ile toplanir. Ayri blok olarak
+        // yazilsalardi alt maddeler ait olduklari ust maddeden once cikardi.
         const items = [];
-        for (const li of el.children) {
-          if (li.tagName.toLowerCase() !== "li") continue;
-          const nested = li.querySelector(":scope > ul, :scope > ol");
-          const src = nested ? withoutNested(li) : li;
-          const text = clean(inline(src));
-          if (text) items.push({ text, links: linksIn(src), depth });
-          if (nested) walk(li, depth + 1);
-        }
+        const collect = (listEl, d) => {
+          for (const li of listEl.children) {
+            if (li.tagName.toLowerCase() !== "li") continue;
+            const nested = li.querySelector(":scope > ul, :scope > ol");
+            const src = nested ? withoutNested(li) : li;
+            const text = clean(inline(src));
+            if (text) items.push({ text, links: linksIn(src), depth: d });
+            if (nested) collect(nested, d + 1);
+          }
+        };
+        collect(el, depth);
         if (items.length) blocks.push({ type: "list", ordered: tag === "ol", items, links: linksIn(el) });
 
       } else if (tag === "table") {
@@ -155,7 +167,16 @@
     else if (b.type === "paragraph") md.push(b.text + "\n");
     else if (b.type === "code") md.push("```\n" + b.text + "\n```\n");
     else if (b.type === "list") {
-      b.items.forEach((it, i) => md.push("  ".repeat(it.depth) + (b.ordered ? i + 1 + ". " : "- ") + it.text));
+      // Numaralandirma her seviyede kendi sayacini kullanir; alt seviyeye inip
+      // geri cikildiginda derin sayaclar sifirlanir.
+      const base = b.items[0].depth || 0;
+      const counters = {};
+      for (const it of b.items) {
+        const d = Math.max(0, (it.depth || 0) - base);
+        counters[d] = (counters[d] || 0) + 1;
+        for (const k of Object.keys(counters)) if (+k > d) delete counters[k];
+        md.push("  ".repeat(d) + (b.ordered ? counters[d] + ". " : "- ") + it.text);
+      }
       md.push("");
     } else if (b.type === "table") {
       b.rows.forEach((cells, ri) => {
