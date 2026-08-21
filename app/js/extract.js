@@ -109,6 +109,13 @@
     return out;
   };
 
+  // NOT: Google, cevabin altina kaynak kartlarini (baslik + snippet + domain) da
+  // ayni kapsayicinin icinde liste olarak koyuyor ve bunlar 'answer' metnine
+  // karisiyor. Ayirmayi denedik ancak bu DOM'da guvenilir bir sinyal yok:
+  // sinif adlari obfuscated, kart ile duzyazi listesi ayni yapida, ve TUM <a>
+  // elemanlarinin metni bos (gorunen metin kardes elemanlarda). Link/metin orani
+  // heuristigi bu yuzden hic tetiklenmiyor. Farkli dil/sorgu fixture'lari
+  // biriktikce yeniden bakilmali.
   const withoutNested = (li) => {
     const c = li.cloneNode(true);
     for (const n of c.querySelectorAll(":scope > ul, :scope > ol")) n.remove();

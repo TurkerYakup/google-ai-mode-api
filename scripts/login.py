@@ -5,12 +5,16 @@ Ne zaman lazim olur:
   * Google dogrulama ekrani ("olagandisi trafik") cikip API 503 donuyorsa
   * AI Mode'u kendi Google hesabinizla sorgulamak istiyorsaniz
 
-Host'ta calistirin (container'da ekran yok). Ayni profil dizinini kullandigi
-icin yaptiginiz oturum acma/onaylama dogrudan API'ye yansir.
+Ekrani olan bir makinede calistirin (container'da ekran yok):
 
-    python scripts/login.py --profile ./data/profile/desktop
+    python scripts/login.py --profile ./profile-desktop
 
-Isiniz bitince pencereyi kapatin, sonra: docker compose restart
+Uretilen profili calisan servise aktarmak icin (profil adlandirilmis bir
+Docker volume'unda tutuluyor):
+
+    docker compose cp ./profile-desktop google-ai-mode-api:/data/profile/desktop
+    docker compose exec -u root google-ai-mode-api chown -R app:app /data/profile
+    docker compose restart
 """
 
 import argparse
@@ -31,7 +35,7 @@ MOBILE_UA = (
 
 async def main() -> None:
     ap = argparse.ArgumentParser(description="AI Mode profilini elle hazirla")
-    ap.add_argument("--profile", default="./data/profile/desktop", help="Profil dizini")
+    ap.add_argument("--profile", default="./profile-desktop", help="Profil dizini")
     ap.add_argument("--device", choices=["desktop", "mobile"], default="desktop")
     ap.add_argument("--url", default="https://www.google.com/search?q=test&udm=50")
     args = ap.parse_args()

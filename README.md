@@ -229,6 +229,15 @@ By design, and stated plainly:
   durability.
 - **AI Mode doesn't always trigger.** Google skips the AI answer for some queries; you get
   `502 no_answer`.
+- **`answer` ends with Google's source cards.** Google places the source cards (title +
+  snippet + domain) inside the same container as the answer. They are not answer prose,
+  but they end up in `answer` and in `stats.words`. We tried to split them out; this DOM
+  offers no reliable signal — class names are obfuscated, a card and a prose list share
+  the same structure, and every `<a>` has empty text. If word count matters to your
+  analysis, drop the trailing list blocks from `blocks`.
+- **`follow_ups` is usually empty.** In the verified Turkish capture, AI Mode rendered no
+  follow-up suggestions at all — not a single question-shaped element anywhere on the
+  page. The code stays in; it may populate in other locales or layouts.
 
 ---
 

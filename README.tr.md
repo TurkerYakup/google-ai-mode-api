@@ -228,6 +228,16 @@ Tasarım gereği, açıkça:
 - **Görevler bellekte.** Yeniden başlatma kuyruğu siler. Kalıcılık için Redis/Postgres ekleyin.
 - **AI Mode her sorguda çıkmaz.** Google bazı sorgularda yapay zekâ cevabı üretmez;
   `502 no_answer` alırsınız.
+- **`answer` sonunda kaynak kartları yer alır.** Google, cevabın altındaki kaynak
+  kartlarını (başlık + snippet + domain) aynı kapsayıcının içine koyuyor; bunlar
+  cevabın düz yazısı değil ama `answer` metnine ve `stats.words` sayısına dahil
+  oluyor. Ayırmayı denedik, bu DOM'da güvenilir bir sinyal yok: sınıf adları
+  obfuscated, kart ile düz yazı listesi aynı yapıda ve tüm `<a>` elemanlarının
+  metni boş. Analizde kelime sayısı kritikse `blocks` dizisinin son liste
+  bloklarını dışarıda bırakın.
+- **Devam soruları (`follow_ups`) çoğu zaman boş döner.** Doğrulanmış Türkçe
+  yakalamada AI Mode bu önerileri hiç göstermiyordu — sayfanın tamamında soru
+  biçiminde tek bir öğe yoktu. Kod duruyor, farklı dil/düzenlerde dolabilir.
 
 ---
 
