@@ -213,6 +213,11 @@ By design, and stated plainly:
 - **Single IP, no proxy pool.** Query hard enough and Google shows a verification page; the
   API then returns `503 blocked`. For volume, put a residential proxy in front via
   `GAM_BROWSER_ARGS` (`--proxy-server=…`).
+- **Expect to be challenged on day one.** A cold profile on an unknown IP often gets the
+  "unusual traffic" page within the first few requests — this is normal, not a bug. Solve it
+  once by hand (see *Maintaining the browser profile*); the resulting cookie usually settles
+  things down. `GAM_BROWSER_CHANNEL=chromium` matters here: Playwright otherwise runs its
+  `headless-shell` binary, which is flagged noticeably faster than the full browser.
 - **CAPTCHAs are not solved.** When a verification page appears the request fails, on
   purpose. `scripts/login.py` lets you clear it by hand in a visible browser.
 - **Selectors are fragile.** Google's DOM is obfuscated and changes often. Hence three

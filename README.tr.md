@@ -213,6 +213,11 @@ Tasarım gereği, açıkça:
 
 - **Tek IP, proxy havuzu yok.** Sık sorguda Google doğrulama ekranı çıkarır; API `503 blocked`
   döner. Hacim için `GAM_BROWSER_ARGS` ile önüne residential proxy koyun (`--proxy-server=…`).
+- **İlk gün doğrulama ekranı görmeyi bekleyin.** Tanınmayan bir IP'deki soğuk profil çoğu
+  zaman ilk birkaç istekte "sıra dışı trafik" sayfasına düşer; bu normal, hata değil. Bir kez
+  elle çözün (bkz. *Profil bakımı*), oluşan çerez genelde durumu yatıştırır. Burada
+  `GAM_BROWSER_CHANNEL=chromium` önemli: aksi halde Playwright `headless-shell` ikilisini
+  çalıştırır ve o, tam tarayıcıya göre gözle görülür biçimde daha hızlı işaretlenir.
 - **CAPTCHA aşılmaz.** Doğrulama ekranı çıktığında istek bilerek başarısız olur.
   `scripts/login.py` ile görünür tarayıcıda elle temizleyebilirsiniz.
 - **Selector'lar kırılgan.** Google'ın DOM'u obfuscated ve sık değişiyor. Bu yüzden üç katman:
