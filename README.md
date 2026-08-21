@@ -86,8 +86,9 @@ curl "http://127.0.0.1:8000/v1/query?q=best+crm&track_domains=yoursite.com,compe
 
 ### Async tasks (recommended)
 
-An AI Mode answer takes 30–90 s to stream. Most HTTP clients give up first. Submit a task,
-get an ID, poll later — or have the result POSTed to your webhook:
+An AI Mode answer streams in a measured ~10-15 s, sometimes longer. For keyword sets or
+clients that cannot wait, submit a task, get an ID, poll later — or have the result POSTed
+to your webhook:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/v1/tasks/query \
@@ -203,6 +204,36 @@ It has no proxy pool, no SLA, and one IP address.
 Features on the roadmap, openly borrowed from the vendors above: multi-turn follow-ups in a
 single session, extraction of shopping / local / video blocks, and a token-efficient
 `output=md` response format.
+
+---
+
+## Measured limits
+
+From a single residential home IP (Turkey), `GAM_POOL_SIZE=1`, full Chromium
+(`GAM_BROWSER_CHANNEL=chromium`), measured 22 August 2026:
+
+| Measurement | Value |
+|---|---|
+| Time per query | **~10-11 s** median (first query ~14 s) |
+| Sequential queries, 5 s apart | **15/15 clean** (≈4 queries/min, 232 s) |
+| Sequential queries, no gap | **28 clean, blocked on the 29th** (≈5.5/min, 311 s) |
+| Combined threshold | roughly **43 queries / ~10 minutes** |
+| How the block looks | `503 blocked`, instant (~1 s), `/sorry/index` |
+
+The important detail: the block landed on request 44 **counting across both runs**. So this
+behaves less like a pure rate limit and more like an accumulating budget — slowing down
+delays the threshold but does not remove it. Recovery after a block can take hours.
+
+Practical capacity: **~40 queries per hour** with pauses between clusters. Beyond that you
+need a proxy (`GAM_PROXY_SERVER`).
+
+### Memory
+
+Over 44 queries container RSS grows **980 MB → 1.37 GB**. `GAM_PAGE_RECYCLE_AFTER=25`
+recycled the tab once, but Chromium's browser process still grows. `POST /v1/browser/restart`
+brings it back to **973 MB** — exactly the cold baseline. Call it periodically on long-running
+deployments; the `mem_limit: 2g` in `docker-compose.yml` is comfortable at this growth rate
+but not unlimited.
 
 ---
 

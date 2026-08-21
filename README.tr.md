@@ -87,8 +87,9 @@ curl "http://127.0.0.1:8000/v1/query?q=en+iyi+crm&track_domains=siteniz.com,raki
 
 ### Async görev (önerilen)
 
-AI Mode cevabı 30–90 sn akar; çoğu HTTP istemcisi bu kadar beklemez. Görev aç, ID al,
-sonra sonucu çek — ya da bitince webhook'unuza POST edilsin:
+AI Mode cevabı ölçülen ~10-15 sn akar, uç durumda daha uzun. Uzun keyword kümelerinde ya da
+bekleyemeyen istemcilerde görev aç, ID al, sonra sonucu çek — ya da bitince webhook'unuza
+POST edilsin:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/v1/tasks/query \
@@ -204,6 +205,36 @@ istemiyorsanız. Proxy havuzu yok, SLA yok, tek IP var.
 Yol haritasında, yukarıdaki sağlayıcılardan açıkça ödünç alınanlar: tek oturumda çok turlu
 devam soruları, alışveriş / yerel / video bloklarının ayıklanması ve token açısından verimli
 `output=md` yanıt biçimi.
+
+---
+
+## Ölçülen limitler
+
+Tek bir ev IP'sinden (Türkiye, residential), `GAM_POOL_SIZE=1`, tam Chromium
+(`GAM_BROWSER_CHANNEL=chromium`), 22 Ağustos 2026'da ölçüldü:
+
+| Ölçüm | Değer |
+|---|---|
+| Sorgu başına süre | **~10-11 sn** (medyan; ilk sorgu ~14 sn) |
+| 5 sn aralıkla ardışık sorgu | **15/15 sorunsuz** (≈4 sorgu/dk, 232 sn) |
+| Aralıksız ardışık sorgu | **28 sorunsuz, 29.'da engel** (≈5.5 sorgu/dk, 311 sn) |
+| Toplam eşik | Yaklaşık **43 sorgu / ~10 dakika** |
+| Engel biçimi | `503 blocked`, anında (~1 sn), `/sorry/index` |
+
+Kritik ayrıntı: engel iki koşumun **toplamında** 44. istekte geldi. Yani bu saf bir
+hız limiti değil, biriken bir bütçe gibi davranıyor — yavaşlatmak eşiği geciktirir
+ama kaldırmaz. Engellendikten sonra toparlanma saatler sürebiliyor.
+
+Pratik kapasite: **saatte ~40 sorgu**, kümeler arasında ara vererek. Daha fazlası
+için proxy şart (`GAM_PROXY_SERVER`).
+
+### Bellek
+
+44 sorguda container RAM'i **980 MB → 1.37 GB**'a çıkıyor. `GAM_PAGE_RECYCLE_AFTER=25`
+sayesinde sekme bir kez geri dönüştürüldü, ama Chromium'un tarayıcı süreci yine büyüyor.
+`POST /v1/browser/restart` RAM'i **973 MB**'a, yani tam başlangıç seviyesine döndürüyor.
+Sürekli çalışan kurulumlarda bunu periyodik çağırın; `docker-compose.yml`'deki
+`mem_limit: 2g` bu büyüme hızına göre rahat ama sonsuz değil.
 
 ---
 

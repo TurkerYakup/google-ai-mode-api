@@ -185,7 +185,7 @@ $("f").addEventListener("submit", async (e) => {
   $("go").disabled = true;
 
   const t0 = Date.now();
-  $("status").textContent = "Sorgulanıyor… AI Mode cevabı 30-90 sn sürebilir.";
+  $("status").textContent = "Sorgulanıyor… genellikle 10-15 sn sürer.";
   timer = setInterval(() => {
     $("status").textContent = `Sorgulanıyor… ${Math.round((Date.now() - t0) / 1000)} sn`;
   }, 1000);

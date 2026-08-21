@@ -1,4 +1,4 @@
-"""Async gorev kuyrugu: AI Mode cevaplari 30-90 sn surdugu icin senkron beklemek
+"""Async gorev kuyrugu: AI Mode cevaplari olculen ~10-15 sn (uc durumda daha uzun)
 cogu HTTP istemcisinde zaman asimina dusuyor. Gorev ac, ID al, sonra sonucu cek."""
 
 import asyncio
