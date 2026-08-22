@@ -14,7 +14,10 @@ jobs:
         with:
           python-version: "3.12"
       # pytest>=7: pytest.ini icindeki 'pythonpath' secenegi o surumle geldi.
-      - run: pip install "pydantic>=2.9,<3.0" "pydantic-settings>=2.6,<3.0" "pytest>=7" playwright
+      # fastapi/httpx: tests/test_auth.py app.main'i import ediyor. Bunlar CI'da
+      # yoktu ve API katmaninin hic testi yoktu -- Bearer auth hatasi da bu yuzden
+      # fark edilmeden yayinlandi.
+      - run: pip install "pydantic>=2.9,<3.0" "pydantic-settings>=2.6,<3.0" "pytest>=7" playwright "fastapi>=0.115,<1.0" "httpx>=0.27,<1.0"
       # extract.js testleri gercek DOM API'leri gerektirdigi icin Chromium sart.
       # Google'a istek gitmez: fixture'lar route ile yerel olarak sunulur.
       - run: playwright install --with-deps chromium
