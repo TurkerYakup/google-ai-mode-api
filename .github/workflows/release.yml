@@ -67,13 +67,29 @@ jobs:
       # are written once (in English) at tag time and never drift from the tag.
       # Commit subjects are Turkish; --generate-notes would paste them into an
       # otherwise English release page, so it is deliberately not used.
+      #
+      # The message is read over the API rather than with `git tag -l`, because
+      # actions/checkout leaves the tag as a lightweight ref -- `%(contents)`
+      # then silently falls back to the *commit* message and the release ships
+      # with the wrong body.
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
         run: |
-          git tag -l --format='%(contents)' "${{ github.ref_name }}" > notes.md
+          set -euo pipefail
+          obj=$(gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" --jq '.object.sha')
+          type=$(gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" --jq '.object.type')
+          if [ "$type" != "tag" ]; then
+            echo "::error::$TAG is a lightweight tag. Release notes come from the" \
+                 "annotation -- create it with 'git tag -a $TAG -F notes.md'."
+            exit 1
+          fi
+          gh api "repos/${{ github.repository }}/git/tags/$obj" --jq '.message' > notes.md
           printf '\n---\n\nContainer image: `ghcr.io/%s:%s`\n' \
-            "${{ github.repository }}" "${{ github.ref_name }}" >> notes.md
-          gh release create "${{ github.ref_name }}" \
-            --title "${{ github.ref_name }}" \
-            --notes-file notes.md
+            "${{ github.repository }}" "$TAG" >> notes.md
+
+          # Re-running a tag must converge on the same release, not fail on a
+          # leftover one. --cleanup-tag is left off so the tag itself survives.
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          gh release create "$TAG" --title "$TAG" --notes-file notes.md
