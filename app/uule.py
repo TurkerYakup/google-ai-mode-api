@@ -1,9 +1,18 @@
 """Google 'uule' konum parametresi kodlamasi.
 
 Google bu parametreyi belgelemiyor; asagidaki kodlama SEO araclarinda yaygin
-kullanilan, kanonik konum adini base64'leyen surumdur. Google yok sayabilir,
-bu yuzden sonucta hangi konumun istendigi 'resolved_location' ile geri donulur.
-Kendi uule degerinizi elde ettiyseniz istekte dogrudan 'uule' alanini kullanin.
+kullanilan, kanonik konum adini base64'leyen surumdur.
+
+OLCULDU: AI Mode bunu yok sayiyor. Ayni sorgu Berlin ve Istanbul icin sorulunca
+iki seferde de sunucunun fiziksel konumundaki (Bursa) sonuclar dondu; Berlin
+isteginde tek bir .de domaini cikmadi. Kontrol kosumu da gerekti, cunku AI Mode
+deterministik degil: ayni konum iki kez sorulunca domain ortakligi %31, iki
+farkli sehirde %26 -- yani konuma atfedilebilecek fark gurultunun altinda.
+
+Kod yine de duruyor: cagri sozlesmesini bozmamak ve Google davranisini
+degistirirse hazir olmak icin. 'resolved_location' alani ISTENEN konumu geri
+yazar, uygulandiginin onayi DEGILDIR. Gercekten konuma ozel sonuc gerekiyorsa
+tek calisan yol o konumda bir proxy kullanmaktir (GAM_PROXY_SERVER).
 """
 
 import base64

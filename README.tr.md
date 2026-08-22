@@ -98,7 +98,6 @@ curl -s -X POST http://127.0.0.1:8000/v1/query \
   -H 'Content-Type: application/json' \
   -d '{
         "query": "Bursa yapay zeka firmaları",
-        "location": "Bursa,Turkey",
         "device": "desktop",
         "track_domains": ["siteniz.com", "rakip.com"],
         "track_brands": ["Markanız"]
@@ -134,7 +133,6 @@ curl -s -X POST http://127.0.0.1:8000/v1/tasks/batch \
   -d '{
         "queries": ["crm yazılımı", "crm fiyatları", "ücretsiz crm"],
         "track_domains": ["siteniz.com"],
-        "location": "Ankara,Turkey",
         "tag": "crm-kumesi"
       }'
 ```
@@ -203,8 +201,8 @@ ile taşır, toplu isteğin kendisi yine `200` döner.
 | `hl` | `language_code` | `GAM_HL` | Arayüz dili (`tr`, `en`, `de`) |
 | `gl` | `country_code` | `GAM_GL` | Ülke kodu (`TR`, `US`) |
 | `google_domain` | `se_domain` | `www.google.com` | Örn. `www.google.com.tr` |
-| `location` | `location_name` | — | Kanonik konum → `uule`. Örn. `Bursa,Turkey` |
-| `uule` | — | — | Kendi uule değeriniz; `location`'ı ezer |
+| `location` | `location_name` | — | Kanonik konum → `uule`. **Ölçüldü, etkisiz — aşağıya bakın** |
+| `uule` | — | — | Kendi uule değeriniz; `location`'ı ezer. Aynı çekince geçerli |
 | `device` | — | `desktop` | `desktop` \| `mobile` — ayrı profil, UA ve viewport |
 | `track_domains` | — | `[]` | Bu domainler atıf almış mı (alt alan adları dahil) |
 | `track_brands` | — | `[]` | Bu ifadeler cevapta geçiyor mu, bağlamıyla |
@@ -342,8 +340,29 @@ Tasarım gereği, açıkça:
 - **Selector'lar kırılgan.** Google'ın DOM'u obfuscated ve sık değişiyor. Bu yüzden üç katman:
   yapılandırılabilir selector listesi → "en büyük metin bloğu" heuristiği → yenisini bulmak
   için `/v1/debug/html`. `extracted_by` alanı hangisinin devreye girdiğini söyler.
-- **`uule` kodlaması resmî değil.** Topluluk tarafından çözülmüş biçim; Google yok sayabilir.
-  Konum kritikse çıktıyı doğrulayın ya da kendi `uule` değerinizi geçin.
+- **Konum hedefleme çalışmıyor. Sonuçlar sunucunun IP adresine göre geliyor.**
+  Bu varsayım değil, ölçüm. Aynı Türkçe soru `location=Berlin,Germany` ve
+  `location=Istanbul,Turkey` ile sorulduğunda iki seferde de aynı cevap döndü —
+  üstelik cevap, test makinesinin fiziksel olarak bulunduğu **Bursa**'daki
+  restoranlarla ilgiliydi. Berlin isteği tek bir `.de` domaini bile göstermedi,
+  metinde "Berlin" hiç geçmedi.
+
+  Burada kontrol grubu şart, çünkü AI Mode deterministik değil: **aynı** konum iki
+  kez sorulduğunda atıf domainlerinin örtüşmesi %31, **iki farklı** şehirde ise %26
+  çıktı. Konuma atfedilebilecek fark, ölçüm gürültüsünün altında — yani ölçülebilir
+  bir fark yok.
+
+  Bunun iki sonucu var. Birincisi, `uule` kodlaması topluluk tarafından çözülmüş
+  gayriresmî biçim ve Google AI Mode'da bunu görmezden geliyor. İkincisi — asıl tuzak
+  bu — `resolved_location` alanı ne istediyseniz onu aynen geri yazıyor, dolayısıyla
+  yanıt konum uygulanmış **gibi görünüyor**. O alanı "istenen konum" olarak okuyun,
+  asla onay olarak değil.
+
+  Parametreler yine de kabul ediliyor: hem mevcut çağrılar bozulmasın diye, hem de
+  Google davranışını değiştirirse diye. Bugün gerçekten konuma özel sonuç gerekiyorsa
+  tek işe yarayan yol, container'ı o konumdaki bir proxy üzerinden geçirmek
+  (`GAM_PROXY_SERVER`). Ölçümün kapsamı: tek sorgu, tek dil, iki şehir, tek IP —
+  "çalışıyor" iddiasını çürütmeye yeter, "hiç çalışmaz" demeye yetmez.
 - **Görevler bellekte.** Yeniden başlatma kuyruğu siler. Kalıcılık için Redis/Postgres ekleyin.
 - **AI Mode her sorguda çıkmaz.** Google bazı sorgularda yapay zekâ cevabı üretmez;
   `502 no_answer` alırsınız.

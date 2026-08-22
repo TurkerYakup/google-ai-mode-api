@@ -96,7 +96,6 @@ curl -s -X POST http://127.0.0.1:8000/v1/query \
   -H 'Content-Type: application/json' \
   -d '{
         "query": "best crm software",
-        "location": "Istanbul,Turkey",
         "device": "desktop",
         "track_domains": ["yoursite.com", "competitor.com"],
         "track_brands": ["YourBrand"]
@@ -132,7 +131,6 @@ curl -s -X POST http://127.0.0.1:8000/v1/tasks/batch \
   -d '{
         "queries": ["crm software", "crm pricing", "free crm"],
         "track_domains": ["yoursite.com"],
-        "location": "Ankara,Turkey",
         "tag": "crm-cluster"
       }'
 ```
@@ -201,8 +199,8 @@ In batch responses each item carries its own error under `items[].error` with th
 | `hl` | `language_code` | `GAM_HL` | Interface language (`tr`, `en`, `de`) |
 | `gl` | `country_code` | `GAM_GL` | Country code (`TR`, `US`) |
 | `google_domain` | `se_domain` | `www.google.com` | e.g. `www.google.co.uk` |
-| `location` | `location_name` | — | Canonical location → `uule`. e.g. `Istanbul,Turkey` |
-| `uule` | — | — | Pass your own uule; overrides `location` |
+| `location` | `location_name` | — | Canonical location → `uule`. **Measured to have no effect — see below** |
+| `uule` | — | — | Pass your own uule; overrides `location`. Same caveat |
 | `device` | — | `desktop` | `desktop` \| `mobile` — separate profile, UA and viewport |
 | `track_domains` | — | `[]` | Did these domains get cited (subdomains included) |
 | `track_brands` | — | `[]` | Do these strings appear in the answer, with context |
@@ -341,8 +339,29 @@ By design, and stated plainly:
 - **Selectors are fragile.** Google's DOM is obfuscated and changes often. Hence three
   layers: a configurable selector list → a "largest text block" heuristic → `/v1/debug/html`
   to find a new one. The `extracted_by` field tells you which layer fired.
-- **The `uule` encoding is unofficial.** It is the community-derived format; Google may
-  ignore it. If location precision is critical, verify the output or pass your own `uule`.
+- **Location targeting does not work. Results follow the server's IP address.**
+  This was measured, not assumed. Asking the same Turkish-language question with
+  `location=Berlin,Germany` and with `location=Istanbul,Turkey` returned the same
+  answer both times — and it was about restaurants in Bursa, where the test machine
+  physically sits. The Berlin request cited zero `.de` domains and never mentioned
+  Berlin.
+
+  A control run matters here, because AI Mode is not deterministic: asking the *same*
+  location twice gave 31 % citation-domain overlap, while two *different* cities gave
+  26 %. The gap attributable to location is smaller than the run-to-run noise, which
+  is to say there is no measurable gap at all.
+
+  Two consequences. First, the `uule` encoding is the community-derived format and
+  Google appears to simply ignore it on AI Mode. Second — and this is the trap —
+  `resolved_location` echoes back whatever you asked for, so a response *looks* like
+  the location was applied when it was not. Treat that field as "what you requested",
+  never as confirmation.
+
+  The parameters are still accepted, both so existing callers keep working and in case
+  Google's behaviour changes. If you genuinely need location-specific results today,
+  the only thing that works is routing the container through a proxy in that location
+  (`GAM_PROXY_SERVER`). Scope of the measurement: one query, one locale, two cities,
+  one IP — enough to disprove "it works", not enough to prove it never does.
 - **Tasks live in memory.** A restart clears the queue. Add Redis/Postgres if you need
   durability.
 - **AI Mode doesn't always trigger.** Google skips the AI answer for some queries; you get

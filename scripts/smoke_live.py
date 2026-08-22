@@ -192,23 +192,47 @@ def t_stream():
 
 
 def t_location():
-    """uule gercekten sonucu degistiriyor mu? Iki sehir, ayni sorgu.
+    """uule gercekten sonucu degistiriyor mu? KONTROLLU olcum.
 
-    Bu testin 'FARK YOK' demesi hata degil BULGUdur: konum hedefleme sus demektir
-    ve README'den kaldirilmasi gerekir.
+    Onceki surumu iki farkli sehri karsilastirip "farkli cikti, demek ki calisiyor"
+    diyordu. Bu gecersizdi: AI Mode ayni girdiye ayni cevabi vermiyor. Olculdu --
+    ayni konum iki kez sorulunca domain ortakligi %31, iki farkli sehirde %26.
+    Yani teste konuma atfettirdigimiz fark, olcum gurultusunun altindaydi ve
+    esik (metin birebir ayni VE ortaklik > %80) hicbir zaman saglanmadigi icin
+    test gercek ne olursa olsun "etkili" diyordu.
+
+    Dogru karsilastirma tedavi-kontrol: ayni sehir iki kez (kontrol) ve iki
+    farkli sehir (tedavi). uule calisiyorsa tedavi ortakligi kontrolun belirgin
+    ALTINDA olmali. Degilse fark gurultudur.
     """
-    spend(2)
+    spend(4)
     q = "en iyi restoranlar"
-    st1, a = call("POST", "/v1/query", {"query": q, "location": "Istanbul,Turkey", "cache": False})
-    assert st1 == 200, a
-    time.sleep(DELAY)
-    st2, b = call("POST", "/v1/query", {"query": q, "location": "Berlin,Germany", "cache": False})
-    assert st2 == 200, b
-    da, db = {c["domain"] for c in a["citations"]}, {c["domain"] for c in b["citations"]}
-    same_text = a["answer"][:400] == b["answer"][:400]
-    overlap = len(da & db) / max(1, len(da | db))
-    verdict = "FARK YOK -> uule etkisiz olabilir" if (same_text and overlap > 0.8) else "FARKLI -> uule etkili"
-    return f"{verdict} (domain ortakligi %{overlap*100:.0f}, metin ayni={same_text})"
+
+    def ask(loc):
+        st, d = call("POST", "/v1/query",
+                     {"query": q, "location": loc, "hl": "tr", "gl": "TR", "cache": False})
+        assert st == 200, d
+        return d
+
+    def overlap(x, y):
+        a = {c["domain"] for c in x["citations"]}
+        b = {c["domain"] for c in y["citations"]}
+        return len(a & b) / max(1, len(a | b))
+
+    c1 = ask("Istanbul,Turkey"); time.sleep(DELAY)
+    c2 = ask("Istanbul,Turkey"); time.sleep(DELAY)
+    t1 = ask("Berlin,Germany")
+    control, treatment = overlap(c1, c2), overlap(c2, t1)
+
+    # Berlin istenip Alman icerigi hic gelmiyorsa, oran hesabina gerek kalmadan bellidir.
+    de = len([c for c in t1["citations"] if c["domain"].endswith(".de")])
+
+    if treatment < control - 0.20:
+        verdict = "FARKLI -> uule etkili"
+    else:
+        verdict = "FARK YOK -> uule etkisiz, sonuclar sunucunun IP'sine gore"
+    return (f"{verdict} (kontrol %{control*100:.0f}, tedavi %{treatment*100:.0f}, "
+            f"Berlin sorgusunda .de domain={de})")
 
 
 TESTS = [
