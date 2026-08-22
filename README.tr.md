@@ -3,6 +3,7 @@
 **Google AI Mode (`udm=50`) cevaplarını JSON döndüren, kendi sunucunuzda çalışan API.
 SEO / GEO araştırması için.**
 
+[![Sürüm](https://img.shields.io/github/v/release/TurkerYakup/google-ai-mode-api?color=success&label=s%C3%BCr%C3%BCm)](https://github.com/TurkerYakup/google-ai-mode-api/releases/latest)
 [![CI](https://github.com/TurkerYakup/google-ai-mode-api/actions/workflows/ci.yml/badge.svg)](https://github.com/TurkerYakup/google-ai-mode-api/actions/workflows/ci.yml)
 [![Lisans: MIT](https://img.shields.io/badge/lisans-MIT-blue.svg)](LICENSE)
 [![Container](https://img.shields.io/badge/ghcr.io-google--ai--mode--api-2496ed?logo=docker&logoColor=white)](https://github.com/TurkerYakup/google-ai-mode-api/pkgs/container/google-ai-mode-api)
