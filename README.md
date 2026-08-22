@@ -212,7 +212,10 @@ clients send) and `X-API-Key` are accepted.
 | `GET` | `/v1/debug/html?q=…` | Raw HTML, for fixing selectors (off by default) |
 | `GET` | `/v1/debug/screenshot?q=…` | Full-page PNG, base64 |
 
-When `GAM_API_KEY` is set, every `/v1/*` route requires an `X-API-Key` header.
+When `GAM_API_KEY` is set, every `/v1/*` route requires the key, in either an
+`X-API-Key` header or an `Authorization: Bearer` one. **`/v1/models` is the deliberate
+exception** — OpenAI clients probe it to test connectivity before credentials are
+configured, and it returns nothing but a static model id.
 
 ### Errors
 

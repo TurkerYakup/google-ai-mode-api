@@ -509,6 +509,11 @@ def _tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+# require_key BILEREK yok. OpenAI istemcileri (Open WebUI basta olmak uzere) bu ucu
+# kimlik bilgisi girilmeden once baglanti sinamak icin yoklar; korumak "sunucuya
+# ulasilamiyor" gibi gorunen bir kurulum hatasi uretir. Uc sabit bir model kimliginden
+# baska bir sey dondurmedigi icin sizacak bir bilgi de yok. Diger tum /v1/* uclarinda
+# require_key var; bu istisna README'de de yaziyor.
 @app.get("/v1/models", tags=["openai"], summary="OpenAI uyumlu model listesi")
 async def list_models() -> dict:
     return {
