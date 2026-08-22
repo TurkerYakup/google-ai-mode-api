@@ -215,10 +215,9 @@ gönderdiği) hem `X-API-Key` kabul edilir.
 | `GET` | `/v1/debug/html?q=…` | Ham HTML, selector düzeltmek için (kapalı gelir) |
 | `GET` | `/v1/debug/screenshot?q=…` | Tam sayfa PNG, base64 |
 
-`GAM_API_KEY` doluysa tüm `/v1/*` uçları anahtarı ister; `X-API-Key` başlığıyla da
-`Authorization: Bearer` ile de verilebilir. **`/v1/models` bilinçli istisnadır** — OpenAI
-istemcileri kimlik bilgisi girilmeden önce bağlantıyı sınamak için burayı yoklar ve uç
-sabit bir model kimliğinden başka bir şey döndürmez.
+`GAM_API_KEY` doluysa tüm `/v1/*` uçları anahtarı ister — istisnasız — ve anahtar
+`X-API-Key` başlığıyla da `Authorization: Bearer` ile de verilebilir. OpenAI istemcileri
+bearer biçimini gönderir; ikisi de her yerde çalışır.
 
 ### Hatalar
 

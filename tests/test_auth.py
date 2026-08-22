@@ -75,6 +75,40 @@ class TestKeyConfigured:
         assert not check(x_api_key="yanlis", authorization=f"Bearer {KEY}")
 
 
+class TestEveryV1RouteIsProtected:
+    """Her /v1/* rotasi require_key'e bagli mi.
+
+    Yukaridaki testler require_key'i dogrudan cagiriyor, yani fonksiyonun dogru
+    calistigini gosteriyor ama hangi ucun ona BAGLI oldugunu hic sorgulamiyor.
+    /v1/models tam bu bosluktan korumasiz kaldi: fonksiyon kusursuz calisiyordu,
+    o rota ona bagli degildi. Yeni bir uc eklerken dependencies satirini unutmak
+    kolay oldugu icin kontrol testte.
+    """
+
+    def routes(self):
+        from app.main import app
+
+        out = []
+        for r in app.routes:
+            path = getattr(r, "path", "")
+            if not path.startswith("/v1/"):
+                continue
+            deps = getattr(r, "dependant", None)
+            names = {d.call.__name__ for d in deps.dependencies} if deps else set()
+            out.append((path, "require_key" in names))
+        return out
+
+    def test_there_are_routes_to_check(self):
+        assert self.routes(), "/v1/* rotasi bulunamadi -- test kendini kandiriyor"
+
+    def test_all_v1_routes_require_key(self):
+        unprotected = [p for p, ok in self.routes() if not ok]
+        assert not unprotected, (
+            f"require_key tasimayan /v1/* rotalari: {sorted(set(unprotected))}. "
+            f"Anahtar tanimliyken bunlar herkese acik olur."
+        )
+
+
 class TestNoKeyConfigured:
     """GAM_ALLOW_NO_AUTH ile acilan kurulumda hicbir baslik istenmez."""
 

@@ -509,12 +509,14 @@ def _tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-# require_key BILEREK yok. OpenAI istemcileri (Open WebUI basta olmak uzere) bu ucu
-# kimlik bilgisi girilmeden once baglanti sinamak icin yoklar; korumak "sunucuya
-# ulasilamiyor" gibi gorunen bir kurulum hatasi uretir. Uc sabit bir model kimliginden
-# baska bir sey dondurmedigi icin sizacak bir bilgi de yok. Diger tum /v1/* uclarinda
-# require_key var; bu istisna README'de de yaziyor.
-@app.get("/v1/models", tags=["openai"], summary="OpenAI uyumlu model listesi")
+# Bu uc bir sure korumasizdi ve bu kasitli degil, gozden kacmaydi: sizacak bilgisi yok
+# (sabit bir model kimligi) ama yanlis anahtari GIZLIYORDU. Open WebUI'a hatali anahtar
+# girildiginde model listesi geliyor, baglanti kurulmus gorunuyor, sonra ilk sohbette
+# 401 dusuyordu -- hata sebebinden bir adim uzakta patliyordu. Korumali oldugunda anahtar
+# tam girildigi ekranda reddediliyor. Boylece "tum /v1/* uclari anahtar ister" kurali da
+# istisnasiz kaliyor; tests/test_auth.py bunu rota rota dogruluyor.
+@app.get("/v1/models", tags=["openai"], summary="OpenAI uyumlu model listesi",
+         dependencies=[Depends(require_key)])
 async def list_models() -> dict:
     return {
         "object": "list",
