@@ -91,6 +91,33 @@ Swagger arayüzü: <http://127.0.0.1:8000/docs>
 > Port yalnızca `127.0.0.1`'e bağlıdır. `docker-compose.yml` içindeki bu satırı
 > değiştirmeden **önce `GAM_API_KEY` verin**.
 
+### Tarayıcı profilini hazırlayın — ilk sorgudan önce
+
+**Taze bir IP üzerindeki soğuk profil, genellikle ilk birkaç istekte Google'ın "olağandışı
+trafik" ekranını görür.** İlk çalıştırmada en sık yaşanan şey budur ve bu serviste bir hata
+değildir. Kafa karıştırıcı bir `503 blocked` aldıktan sonra değil, şimdi halledin.
+
+Ekranı olan bir makinede:
+
+```bash
+pip install playwright && playwright install chromium
+python scripts/login.py --profile ./profile-desktop   # açılan pencerede doğrulamayı geçin, kapatın
+docker compose cp ./profile-desktop google-ai-mode-api:/data/profile/desktop
+docker compose restart
+```
+
+Bunun ürettiği çerez işleri yatıştırır. Burada iki şey önemli:
+
+- **Oturum açmayın.** Kendi Google hesabınızı kullanmayın —
+  [Tarayıcı profilinin bakımı](#tarayıcı-profilinin-bakımı) bölümüne bakın. IP engeli
+  saatler içinde kalkar, hesap askıya alınması kalkmaz.
+- **`GAM_BROWSER_CHANNEL=chromium` kalsın** (varsayılan). Aksi halde Playwright kendi
+  `headless-shell` ikilisini çalıştırır ve Google onu tam tarayıcıdan belirgin şekilde
+  daha hızlı işaretler.
+
+Bu adımı atlamak çoğu zaman yürür, önce bir sorgu deneyebilirsiniz — sadece `503 blocked`
+görünce ne olduğunu bilin.
+
 ### Tek sorgu
 
 ```bash
@@ -142,6 +169,33 @@ paralel gitmek Google'ın doğrulama ekranını çağırmanın en hızlı yoludu
 
 ---
 
+### LLM olarak kullanma (OpenAI uyumlu)
+
+Hiçbir SERP sağlayıcısının satmadığı kısım bu: AI Mode'un sohbet modeli olarak sunulması.
+Open WebUI, LangChain, Cursor, `openai-python` — OpenAI API'si konuşan ne varsa
+`http://127.0.0.1:8000/v1` adresine yöneltin, ara katman gerekmiyor. Model kimliği
+`google-ai-mode`, API anahtarı da `GAM_API_KEY`.
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $GAM_API_KEY" \
+  -d '{
+        "model": "google-ai-mode",
+        "messages": [{"role": "user", "content": "crm nedir"}]
+      }'
+```
+
+Akış için `"stream": true` ekleyin. Hem `Authorization: Bearer` (OpenAI istemcilerinin
+gönderdiği) hem `X-API-Key` kabul edilir.
+
+> **Akış taklit.** Google cevabın tamamını API görmeden önce üretiyor; dolayısıyla yanıt
+> üretildiği anda değil, sonradan parçalara bölünüyor. İstemciler farkı anlamaz ama ilk
+> parçaya kadar geçen süre sorgunun tam gecikmesidir — gerçek bir modelin verdiği saniye
+> altı değil, ~10-15 saniye.
+
+---
+
 ## Uçlar
 
 | Method | Yol | Açıklama |
@@ -150,6 +204,8 @@ paralel gitmek Google'ın doğrulama ekranını çağırmanın en hızlı yoludu
 | `POST` | `/v1/query` | Tek sorgu, senkron |
 | `GET` | `/v1/query?q=…` | Tek sorgu, senkron, pratik biçim |
 | `POST` | `/v1/batch` | Keyword listesi, senkron (5'ten fazlası için görev kullanın) |
+| `POST` | **`/v1/chat/completions`** | **OpenAI uyumlu sohbet, akışlı ya da akışsız — aşağıya bakın** |
+| `GET` | **`/v1/models`** | **OpenAI uyumlu model listesi, yoklayan istemciler için** |
 | `POST` | `/v1/tasks/query` | Tek sorguyu kuyruğa atar → `202` + `task_id` |
 | `POST` | `/v1/tasks/batch` | Keyword listesini kuyruğa atar |
 | `GET` | `/v1/tasks/{id}` | Görev durumu ve sonucu |
@@ -257,13 +313,16 @@ satın alabilirsiniz. Yani *bunu çalıştırmanın sebebi maliyet değil.*
 
 Ayakta duran sebepler:
 
-- **Sorgularınız makinenizden çıkmıyor.** Müşteri markası takip ediyorsanız önemli.
+- **AI Mode'un OpenAI API'si üzerinden sohbet modeli olması.** Open WebUI, LangChain ya da
+  Cursor'u `/v1`'e yöneltin, Google'ın AI Mode'u model listesinde bir seçenek hâline gelir.
+  **Hiçbir SERP sağlayıcısı bunu satmıyor** — onlar parse etmeniz için JSON döndürür, mevcut
+  bir LLM istemcisine takabileceğiniz bir şey değil.
+  Bkz. [LLM olarak kullanma](#llm-olarak-kullanma-openai-uyumlu).
 - **`blocks[].links` atıfları tek tek iddialara bağlıyor.** Sağlayıcılar düz bir kaynak
   listesi döndürür; burada hangi cümlenin hangi kaynağa dayandığı eşleşir.
 - **GEO metrikleri hazır geliyor** — domain payı, bağlamıyla marka geçişleri, domain takibi.
   Diğerlerinde SERP'i parse edip bunları kendiniz hesaplarsınız.
-- **OpenAI uyumlu uç.** Open WebUI, LangChain ya da Cursor'u `/v1`'e yöneltip AI Mode'u
-  sohbet modeli gibi kullanabilirsiniz. Hiçbir SERP sağlayıcısında bu yok.
+- **Sorgularınız makinenizden çıkmıyor.** Müşteri markası takip ediyorsanız önemli.
 - **Minimum yok, abonelik yok, sorgu başına fatura yok.**
 
 **Satın alın** — hacim, garantili uptime, proxy havuzu, doğrulanmış konum hedefleme ya da
@@ -316,11 +375,19 @@ reddettiği anlamına gelir, container'ı yeniden başlatmak bunu değiştirmez.
 
 ### Bellek
 
-44 sorguda container RAM'i **980 MB → 1.37 GB**'a çıkıyor. `GAM_PAGE_RECYCLE_AFTER=25`
-sayesinde sekme bir kez geri dönüştürüldü, ama Chromium'un tarayıcı süreci yine büyüyor.
-`POST /v1/browser/restart` RAM'i **973 MB**'a, yani tam başlangıç seviyesine döndürüyor.
-Sürekli çalışan kurulumlarda bunu periyodik çağırın; `docker-compose.yml`'deki
-`mem_limit: 2g` bu büyüme hızına göre rahat ama sonsuz değil.
+Container'ın cgroup'undan ~25 sorgu sonrası ölçüldü: **922 MiB kullanımda, 1.34 GiB tepe,
+2 GiB limite karşı.** OOM yok, restart yok. `GAM_PAGE_RECYCLE_AFTER=25` sekmeyi geri
+dönüştürerek bunu düz tutuyor; `POST /v1/browser/restart` başlangıç seviyesine döndürüyor
+ve sürekli çalışan kurulumlarda periyodik çağrılmaya değer.
+
+> **Önceki sürümler burada daha yüksek rakamlar veriyordu (980 MB → 1.37 GB) ve yanlıştı.**
+> `/health`, `memory_mb`'yi `/proc/*/statm`'daki süreç başına RSS'leri toplayarak
+> hesaplıyordu. Chromium onlarca süreç açar ve hepsi aynı kütüphane ile grafik sayfalarını
+> paylaşır; bu toplama ise paylaşılan her sayfayı her süreçte yeniden sayar. Yük altında
+> yaklaşık 2.5 kat şişiriyordu: cgroup 922 MiB derken 2325 MB gösteriyordu. Container
+> limitin %45'indeyken limitin **üstünde** bir sayı gösterebiliyordu. 0.3.1'den itibaren
+> `memory_mb`, her sayfayı bir kez sayan ve `docker stats` ile uyuşan
+> `/sys/fs/cgroup/memory.current` dosyasını okuyor.
 
 ---
 
@@ -331,10 +398,9 @@ Tasarım gereği, açıkça:
 - **Tek IP, proxy havuzu yok.** Sık sorguda Google doğrulama ekranı çıkarır; API `503 blocked`
   döner. Hacim için `GAM_BROWSER_ARGS` ile önüne residential proxy koyun (`--proxy-server=…`).
 - **İlk gün doğrulama ekranı görmeyi bekleyin.** Tanınmayan bir IP'deki soğuk profil çoğu
-  zaman ilk birkaç istekte "sıra dışı trafik" sayfasına düşer; bu normal, hata değil. Bir kez
-  elle çözün (bkz. *Profil bakımı*), oluşan çerez genelde durumu yatıştırır. Burada
-  `GAM_BROWSER_CHANNEL=chromium` önemli: aksi halde Playwright `headless-shell` ikilisini
-  çalıştırır ve o, tam tarayıcıya göre gözle görülür biçimde daha hızlı işaretlenir.
+  zaman ilk birkaç istekte "sıra dışı trafik" sayfasına düşer; bu normal, hata değil. Yeterince
+  sık yaşandığı için hızlı başlangıcın bir adımı hâline getirildi:
+  [Tarayıcı profilini hazırlayın](#tarayıcı-profilini-hazırlayın--ilk-sorgudan-önce).
 - **CAPTCHA aşılmaz.** Doğrulama ekranı çıktığında istek bilerek başarısız olur.
   `scripts/login.py` ile görünür tarayıcıda elle temizleyebilirsiniz.
 - **Selector'lar kırılgan.** Google'ın DOM'u obfuscated ve sık değişiyor. Bu yüzden üç katman:

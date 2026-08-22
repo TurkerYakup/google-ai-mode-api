@@ -89,6 +89,32 @@ Interactive docs (Swagger): <http://127.0.0.1:8000/docs>
 > The port binds to `127.0.0.1` only. **Set `GAM_API_KEY` before** changing that in
 > `docker-compose.yml`.
 
+### Prepare the browser profile — do this before your first query
+
+**A cold profile on a fresh IP usually gets Google's "unusual traffic" page within the
+first few requests.** This is the single most common first-run experience, and it is not
+a bug in this service. Handle it now rather than after a confusing `503 blocked`.
+
+On a machine with a screen:
+
+```bash
+pip install playwright && playwright install chromium
+python scripts/login.py --profile ./profile-desktop   # solve the check in the window, then close it
+docker compose cp ./profile-desktop google-ai-mode-api:/data/profile/desktop
+docker compose restart
+```
+
+The cookie this produces settles things down. Two things matter here:
+
+- **Stay signed out.** Do not use your own Google account — see
+  [Maintaining the browser profile](#maintaining-the-browser-profile). An IP block clears
+  in hours; an account suspension does not.
+- **Keep `GAM_BROWSER_CHANNEL=chromium`** (the default). Otherwise Playwright runs its
+  `headless-shell` binary, which Google flags noticeably faster than the full browser.
+
+Skipping this step works often enough that you can try a query first — just recognise
+`503 blocked` for what it is when it appears.
+
 ### One query
 
 ```bash
@@ -140,6 +166,33 @@ firing them in parallel is the fastest way to get a verification page from Googl
 
 ---
 
+### Use it as an LLM (OpenAI-compatible)
+
+This is the part no SERP vendor sells: AI Mode exposed as a chat model. Point Open WebUI,
+LangChain, Cursor, `openai-python` — anything that speaks the OpenAI API — at
+`http://127.0.0.1:8000/v1` and it works with no shim. The model id is `google-ai-mode`,
+and `GAM_API_KEY` is the API key.
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $GAM_API_KEY" \
+  -d '{
+        "model": "google-ai-mode",
+        "messages": [{"role": "user", "content": "what is a crm"}]
+      }'
+```
+
+Add `"stream": true` for server-sent events. Both `Authorization: Bearer` (what OpenAI
+clients send) and `X-API-Key` are accepted.
+
+> **Streaming is simulated.** Google delivers the whole answer before the API sees it, so
+> the response is chunked after the fact rather than token-by-token as it is generated.
+> Clients cannot tell the difference, but time-to-first-token is the full query latency —
+> around 10–15 s, not the sub-second a real model gives you.
+
+---
+
 ## Endpoints
 
 | Method | Path | Description |
@@ -148,6 +201,8 @@ firing them in parallel is the fastest way to get a verification page from Googl
 | `POST` | `/v1/query` | Single query, synchronous |
 | `GET` | `/v1/query?q=…` | Single query, synchronous, convenience form |
 | `POST` | `/v1/batch` | Keyword list, synchronous (use tasks for >5) |
+| `POST` | **`/v1/chat/completions`** | **OpenAI-compatible chat, streaming or not — see below** |
+| `GET` | **`/v1/models`** | **OpenAI-compatible model list, for clients that probe it** |
 | `POST` | `/v1/tasks/query` | Queue one query → `202` + `task_id` |
 | `POST` | `/v1/tasks/batch` | Queue a keyword list |
 | `GET` | `/v1/tasks/{id}` | Task status and result |
@@ -255,13 +310,15 @@ buy for roughly **$1.15/day**. So *cost is not the reason to run this.*
 
 The reasons that do hold up:
 
-- **Your queries never leave your machine.** Relevant if you track client brands.
+- **AI Mode as a chat model, over the OpenAI API.** Point Open WebUI, LangChain or Cursor
+  at `/v1` and Google's AI Mode becomes a model in the dropdown. **No SERP vendor sells
+  this** — they return JSON for you to parse, not something you can plug into an existing
+  LLM client. See [Use it as an LLM](#use-it-as-an-llm-openai-compatible).
 - **`blocks[].links` maps citations to individual claims.** Vendors return a flat reference
   list; this maps which sentence cites which source.
 - **GEO metrics ship built in** — domain share of voice, brand mentions with context,
   tracked domains. Elsewhere you parse the SERP and compute these yourself.
-- **An OpenAI-compatible endpoint.** Point Open WebUI, LangChain or Cursor at `/v1` and use
-  AI Mode as a chat model. No SERP vendor offers this.
+- **Your queries never leave your machine.** Relevant if you track client brands.
 - **No minimum, no subscription, no per-query bill.**
 
 **Buy instead if** you need volume, guaranteed uptime, a proxy pool, validated location
@@ -314,11 +371,18 @@ container will not change that.
 
 ### Memory
 
-Over 44 queries container RSS grows **980 MB → 1.37 GB**. `GAM_PAGE_RECYCLE_AFTER=25`
-recycled the tab once, but Chromium's browser process still grows. `POST /v1/browser/restart`
-brings it back to **973 MB** — exactly the cold baseline. Call it periodically on long-running
-deployments; the `mem_limit: 2g` in `docker-compose.yml` is comfortable at this growth rate
-but not unlimited.
+Measured from the container's cgroup after ~25 queries: **922 MiB in use, 1.34 GiB peak,
+against a 2 GiB limit.** No OOM kill, no restart. `GAM_PAGE_RECYCLE_AFTER=25` recycles the
+tab to keep this flat; `POST /v1/browser/restart` returns it to the cold baseline and is
+worth calling periodically on long-running deployments.
+
+> **Earlier releases published higher numbers here (980 MB → 1.37 GB) and they were wrong.**
+> `/health` used to compute `memory_mb` by summing per-process RSS from `/proc/*/statm`.
+> Chromium spawns dozens of processes that share the same library and graphics pages, and
+> that sum counts every shared page once per process — so it inflated under load by roughly
+> 2.5×, reporting 2325 MB while the cgroup read 922 MiB. It could show a number *above*
+> `mem_limit` while the container sat at 45 % of it. Since 0.3.1 `memory_mb` reads
+> `/sys/fs/cgroup/memory.current`, which counts each page once and matches `docker stats`.
 
 ---
 
@@ -330,10 +394,9 @@ By design, and stated plainly:
   API then returns `503 blocked`. For volume, put a residential proxy in front via
   `GAM_BROWSER_ARGS` (`--proxy-server=…`).
 - **Expect to be challenged on day one.** A cold profile on an unknown IP often gets the
-  "unusual traffic" page within the first few requests — this is normal, not a bug. Solve it
-  once by hand (see *Maintaining the browser profile*); the resulting cookie usually settles
-  things down. `GAM_BROWSER_CHANNEL=chromium` matters here: Playwright otherwise runs its
-  `headless-shell` binary, which is flagged noticeably faster than the full browser.
+  "unusual traffic" page within the first few requests — normal, not a bug. This is common
+  enough that handling it is a step in the quick start:
+  [Prepare the browser profile](#prepare-the-browser-profile--do-this-before-your-first-query).
 - **CAPTCHAs are not solved.** When a verification page appears the request fails, on
   purpose. `scripts/login.py` lets you clear it by hand in a visible browser.
 - **Selectors are fragile.** Google's DOM is obfuscated and changes often. Hence three

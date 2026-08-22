@@ -187,8 +187,25 @@ class BrowserSession:
 
     @staticmethod
     def memory_mb() -> Optional[float]:
-        """Container icindeki tum sureclerin toplam RSS'i (MB). Chromium'un buyudugunu
-        izlemek icin /health uzerinden gorunur; /proc yoksa None doner."""
+        """Container'in gercek bellek kullanimi (MB). /health uzerinden gorunur.
+
+        Once cgroup v2'nin memory.current'i okunur. Onceki surum bunun yerine tum
+        sureclerin /proc/*/statm RSS'ini topluyordu ve bu 2.5 kata kadar sisiriyordu:
+        Chromium onlarca surec acar, hepsi ayni kutuphane ve grafik tamponlarini
+        paylasir, per-surec RSS ise o paylasilan sayfalari her seferinde yeniden
+        sayar. Olculdu -- cgroup 921 MiB derken bu yontem 2325 MB diyordu, yani
+        container %45 doluyken limitin ustunde gorunuyordu. Bu sayiya bakip tarayici
+        yeniden baslatan biri gereksiz yere, cok erken yeniden baslatir.
+
+        cgroup dosyasi yoksa (cgroup v1, Docker disi calistirma) eski toplama
+        yontemine duser; o durumda deger ust sinir tahminidir, gercek degil.
+        """
+        try:
+            with open("/sys/fs/cgroup/memory.current", "r") as fh:
+                return round(int(fh.read().strip()) / 1024 / 1024, 1)
+        except (OSError, ValueError):
+            pass
+
         total = 0
         try:
             for pid in os.listdir("/proc"):

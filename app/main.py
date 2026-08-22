@@ -205,9 +205,33 @@ app = FastAPI(
 )
 
 
-async def require_key(x_api_key: Optional[str] = Header(None)) -> None:
-    if settings.api_key and x_api_key != settings.api_key:
-        raise HTTPException(status_code=401, detail="Gecersiz veya eksik X-API-Key")
+async def require_key(
+    x_api_key: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None),
+) -> None:
+    """Anahtari iki basliktan da kabul eder: X-API-Key ve Authorization: Bearer.
+
+    Bearer sarti: OpenAI istemcileri (Open WebUI, LangChain, Cursor, openai-python)
+    anahtari her zaman Authorization: Bearer olarak yollar, X-API-Key gondermezler.
+    Yalnizca X-API-Key kabul edildiginde /v1/chat/completions anahtar tanimli her
+    kurulumda 401 veriyordu -- yani OpenAI uyumlulugu tam da ise yarayacagi yerde
+    kiriliyordu. Ikisini de kabul etmek uyumlulugu geri getiriyor; X-API-Key mevcut
+    cagiricilar icin duruyor.
+    """
+    if not settings.api_key:
+        return
+
+    supplied = x_api_key
+    if supplied is None and authorization:
+        scheme, _, value = authorization.partition(" ")
+        if scheme.lower() == "bearer":
+            supplied = value.strip()
+
+    if supplied != settings.api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Gecersiz veya eksik anahtar. X-API-Key ya da Authorization: Bearer kullanin.",
+        )
 
 
 @app.exception_handler(ScrapeError)
