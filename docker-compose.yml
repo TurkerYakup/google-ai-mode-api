@@ -1,8 +1,13 @@
+# Pin the project name so volume names stay stable no matter what the
+# checkout directory is called. Without this, renaming the folder orphans
+# the browser-profile volume.
+name: google-ai-mode-api
+
 services:
   google-ai-mode-api:
     # Pull the prebuilt image:  docker compose pull && docker compose up -d
     # Build from source:        docker compose up -d --build
-    image: ghcr.io/turkeryakup/ai-mode-api:latest
+    image: ghcr.io/turkeryakup/google-ai-mode-api:latest
     build: .
     container_name: google-ai-mode-api
     restart: unless-stopped

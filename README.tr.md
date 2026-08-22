@@ -3,9 +3,9 @@
 **Google AI Mode (`udm=50`) cevaplarını JSON döndüren, kendi sunucunuzda çalışan API.
 SEO / GEO araştırması için.**
 
-[![CI](https://github.com/TurkerYakup/ai-mode-api/actions/workflows/ci.yml/badge.svg)](https://github.com/TurkerYakup/ai-mode-api/actions/workflows/ci.yml)
+[![CI](https://github.com/TurkerYakup/google-ai-mode-api/actions/workflows/ci.yml/badge.svg)](https://github.com/TurkerYakup/google-ai-mode-api/actions/workflows/ci.yml)
 [![Lisans: MIT](https://img.shields.io/badge/lisans-MIT-blue.svg)](LICENSE)
-[![Container](https://img.shields.io/badge/ghcr.io-ai--mode--api-2496ed?logo=docker&logoColor=white)](https://github.com/TurkerYakup/ai-mode-api/pkgs/container/ai-mode-api)
+[![Container](https://img.shields.io/badge/ghcr.io-google--ai--mode--api-2496ed?logo=docker&logoColor=white)](https://github.com/TurkerYakup/google-ai-mode-api/pkgs/container/google-ai-mode-api)
 
 🇬🇧 [English README](README.md)
 
@@ -54,8 +54,8 @@ En kıymetli kısım `blocks[].links`: tüm cevap için tek bir düz link listes
 ## Hızlı başlangıç
 
 ```bash
-git clone https://github.com/TurkerYakup/ai-mode-api.git
-cd ai-mode-api
+git clone https://github.com/TurkerYakup/google-ai-mode-api.git
+cd google-ai-mode-api
 cp .env.example .env
 ```
 

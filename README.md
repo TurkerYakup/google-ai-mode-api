@@ -2,9 +2,9 @@
 
 **Self-hosted JSON API for Google's AI Mode (`udm=50`), built for SEO / GEO research.**
 
-[![CI](https://github.com/TurkerYakup/ai-mode-api/actions/workflows/ci.yml/badge.svg)](https://github.com/TurkerYakup/ai-mode-api/actions/workflows/ci.yml)
+[![CI](https://github.com/TurkerYakup/google-ai-mode-api/actions/workflows/ci.yml/badge.svg)](https://github.com/TurkerYakup/google-ai-mode-api/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Container](https://img.shields.io/badge/ghcr.io-ai--mode--api-2496ed?logo=docker&logoColor=white)](https://github.com/TurkerYakup/ai-mode-api/pkgs/container/ai-mode-api)
+[![Container](https://img.shields.io/badge/ghcr.io-google--ai--mode--api-2496ed?logo=docker&logoColor=white)](https://github.com/TurkerYakup/google-ai-mode-api/pkgs/container/google-ai-mode-api)
 
 🇹🇷 [Türkçe README](README.tr.md)
 
@@ -53,8 +53,8 @@ instead of dumping one flat link list for the whole answer.
 ## Quick start
 
 ```bash
-git clone https://github.com/TurkerYakup/ai-mode-api.git
-cd ai-mode-api
+git clone https://github.com/TurkerYakup/google-ai-mode-api.git
+cd google-ai-mode-api
 cp .env.example .env
 ```
 
