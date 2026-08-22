@@ -201,9 +201,14 @@ def t_location():
     esik (metin birebir ayni VE ortaklik > %80) hicbir zaman saglanmadigi icin
     test gercek ne olursa olsun "etkili" diyordu.
 
-    Dogru karsilastirma tedavi-kontrol: ayni sehir iki kez (kontrol) ve iki
-    farkli sehir (tedavi). uule calisiyorsa tedavi ortakligi kontrolun belirgin
-    ALTINDA olmali. Degilse fark gurultudur.
+    Tedavi-kontrol karsilastirmasi da denendi ve O DA yetersiz cikti: iki
+    kosumda kontrol %31 ve %43, tedavi %26 ve %8 olctu. Her kosulda tek
+    orneklem varken bu kadar oynak bir metrik hicbir yone hukum vermiyor --
+    ayni kosum hem "etkili" hem "etkisiz" diyebiliyor.
+
+    Bu yuzden hukmu NITEL sinyal veriyor: Berlin istenmisse Alman kaynagi
+    gelmeli. Gelmiyorsa konum uygulanmamistir; bu ikili ve gurultuye dayanikli.
+    Ortakligi yine yazdiriyoruz ama sadece baglam olarak, karar icin degil.
     """
     spend(4)
     q = "en iyi restoranlar"
@@ -224,15 +229,16 @@ def t_location():
     t1 = ask("Berlin,Germany")
     control, treatment = overlap(c1, c2), overlap(c2, t1)
 
-    # Berlin istenip Alman icerigi hic gelmiyorsa, oran hesabina gerek kalmadan bellidir.
+    # HUKUM BURADA: Berlin istenip Alman kaynagi hic gelmiyorsa konum uygulanmamistir.
     de = len([c for c in t1["citations"] if c["domain"].endswith(".de")])
+    mentions = t1["answer"].count("Berlin")
 
-    if treatment < control - 0.20:
-        verdict = "FARKLI -> uule etkili"
+    if de or mentions:
+        verdict = f"uule ETKILI (.de kaynak={de}, metinde 'Berlin' gecisi={mentions})"
     else:
-        verdict = "FARK YOK -> uule etkisiz, sonuclar sunucunun IP'sine gore"
-    return (f"{verdict} (kontrol %{control*100:.0f}, tedavi %{treatment*100:.0f}, "
-            f"Berlin sorgusunda .de domain={de})")
+        verdict = ("uule ETKISIZ -> sonuclar sunucunun IP'sine gore geliyor "
+                   "(Berlin istendi, tek bir .de kaynagi ve tek bir 'Berlin' gecisi yok)")
+    return f"{verdict} | baglam: domain ortakligi kontrol %{control*100:.0f} / tedavi %{treatment*100:.0f} (gurultulu, karar disi)"
 
 
 TESTS = [

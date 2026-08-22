@@ -346,10 +346,12 @@ By design, and stated plainly:
   physically sits. The Berlin request cited zero `.de` domains and never mentioned
   Berlin.
 
-  A control run matters here, because AI Mode is not deterministic: asking the *same*
-  location twice gave 31 % citation-domain overlap, while two *different* cities gave
-  26 %. The gap attributable to location is smaller than the run-to-run noise, which
-  is to say there is no measurable gap at all.
+  Citation-domain overlap was tried as a metric and turned out to be useless here.
+  Across two runs, asking the *same* location twice gave 31 % and 43 % overlap, while
+  two *different* cities gave 26 % and 8 %. With one sample per condition and that much
+  spread, the number can be made to say either thing — so the verdict rests on the
+  qualitative signal instead, which is binary and robust: ask for Berlin, count German
+  sources. There were none.
 
   Two consequences. First, the `uule` encoding is the community-derived format and
   Google appears to simply ignore it on AI Mode. Second — and this is the trap —

@@ -5,9 +5,11 @@ kullanilan, kanonik konum adini base64'leyen surumdur.
 
 OLCULDU: AI Mode bunu yok sayiyor. Ayni sorgu Berlin ve Istanbul icin sorulunca
 iki seferde de sunucunun fiziksel konumundaki (Bursa) sonuclar dondu; Berlin
-isteginde tek bir .de domaini cikmadi. Kontrol kosumu da gerekti, cunku AI Mode
-deterministik degil: ayni konum iki kez sorulunca domain ortakligi %31, iki
-farkli sehirde %26 -- yani konuma atfedilebilecek fark gurultunun altinda.
+isteginde tek bir .de domaini cikmadi. Atif domain ortakligini metrik olarak
+kullanmak ise ise yaramadi: ayni konum iki kez sorulunca %31 ve %43, iki farkli
+sehirde %26 ve %8 olctu -- kosul basina tek orneklemle bu kadar oynak bir sayi
+her iki yone de cekilebiliyor. Hukum nitel sinyalde: Berlin istenince Alman
+kaynagi geliyor mu? Gelmiyor.
 
 Kod yine de duruyor: cagri sozlesmesini bozmamak ve Google davranisini
 degistirirse hazir olmak icin. 'resolved_location' alani ISTENEN konumu geri

@@ -347,10 +347,11 @@ Tasarım gereği, açıkça:
   restoranlarla ilgiliydi. Berlin isteği tek bir `.de` domaini bile göstermedi,
   metinde "Berlin" hiç geçmedi.
 
-  Burada kontrol grubu şart, çünkü AI Mode deterministik değil: **aynı** konum iki
-  kez sorulduğunda atıf domainlerinin örtüşmesi %31, **iki farklı** şehirde ise %26
-  çıktı. Konuma atfedilebilecek fark, ölçüm gürültüsünün altında — yani ölçülebilir
-  bir fark yok.
+  Atıf domainlerinin örtüşmesi metrik olarak denendi ve işe yaramadı. İki koşumda
+  **aynı** konum iki kez sorulduğunda örtüşme %31 ve %43, **iki farklı** şehirde ise
+  %26 ve %8 çıktı. Her koşulda tek örneklem varken bu kadar oynak bir sayı istenen
+  her şeyi söyletebilir — bu yüzden hüküm nitel sinyale dayanıyor: Berlin iste, Alman
+  kaynağı say. Hiç yok.
 
   Bunun iki sonucu var. Birincisi, `uule` kodlaması topluluk tarafından çözülmüş
   gayriresmî biçim ve Google AI Mode'da bunu görmezden geliyor. İkincisi — asıl tuzak
