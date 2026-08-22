@@ -86,8 +86,16 @@ jobs:
             exit 1
           fi
           gh api "repos/${{ github.repository }}/git/tags/$obj" --jq '.message' > notes.md
+
+          # This line has to be a command someone can paste. Two ways it was wrong:
+          # the git tag is "v0.3.3" but docker/metadata-action publishes {{version}},
+          # i.e. "0.3.3" -- no such image tag as v0.3.3 -- and github.repository keeps
+          # the owner's capitalisation while GHCR paths must be lowercase, so
+          # `docker pull ghcr.io/TurkerYakup/...` fails on the name before it ever
+          # looks up the tag.
+          image=$(printf '%s' "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           printf '\n---\n\nContainer image: `ghcr.io/%s:%s`\n' \
-            "${{ github.repository }}" "$TAG" >> notes.md
+            "$image" "${TAG#v}" >> notes.md
 
           # Re-running a tag must converge on the same release, not fail on a
           # leftover one. --cleanup-tag is left off so the tag itself survives.
