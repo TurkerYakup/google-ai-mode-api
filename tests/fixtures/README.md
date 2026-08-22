@@ -9,7 +9,8 @@ birakmak yeterli, test kodunda degisiklik gerekmez.
 | Dosya | Ne dogrular |
 |---|---|
 | `synthetic_ai_mode.html` | Elle yazilmis. DOM→markdown donusumunu dogrular: basliklar, ic ice listeler, tablo, `/url?q=` yonlendirme cozme, google.com linklerinin elenmesi, buton/gurultu filtresi, devam sorulari. **Google'in gercek DOM'unu temsil etmez** -- selector'larin hala tuttugunu kanitlamaz. |
-| *(yok)* `real_ai_mode_*.html` | Gercek bir AI Mode sayfasi. Asil kirilgan katman budur: Google DOM'unu obfuscate ediyor ve sik degistiriyor. |
+| `real_ai_mode_tr.html` | Gercek sayfa, `en iyi crm yazilimi` (tr). Tam sayfa, asagidaki DevTools tarifiyle alindi. Selector'larin hala tuttugunu ve cevabin govdesindeki alti maddelik listenin bozulmadan ciktigini dogrular. |
+| `real_ai_mode_tr_sources.html` | Gercek sayfa, `Bursa'da yapay zeka destekli otomasyon...` (tr). Yalnizca cevap kapsayicisi; asagiya bakin. Gizli (`display:none`) geri bildirim/yasal diyaloglarin cevaba sizmadigini dogrular ve kaynak kartlari sorununu canli tutar. |
 
 ## Gercek sayfa nasil yakalanir
 
@@ -44,6 +45,20 @@ copy('<!doctype html>\n' + html);
 > **Kaydetmeden once bakin.** Oturum acikken alinan bir SERP hesap adinizi, profil
 > gorselinizi veya `ei`/`sei` gibi oturum belirteclerini icerebilir. Bu dizin herkese
 > acik repoda; kisisel bir sey varsa temizleyin ya da oturumu kapatip yeniden alin.
+
+## Kucultulmus fixture'lar
+
+`real_ai_mode_tr_sources.html` farkli bir yolla alindi: API'ye `include_html: true` ile
+sorgu atildi, donen kapsayici HTML'i `<div role="main"><div data-subtree="aimc">` icine
+sarildi. Sayfanin tamami degil, sadece cevap kapsayicisi var -- dolayisiyla **devam
+sorulari testi bu fixture'da anlamsizdir** (`follow_ups` kapsayicinin disinda aranir).
+
+Boyutu 400 KB'tan 31 KB'a indirmek icin ayiklamayi etkilemeyen sunlar temizlendi:
+gomulu favicon'lar (`data:` URI), ikon SVG'leri, yorum icine serilestirilmis JSON
+yukleri, `<script>` govdeleri ve `jsaction`/`data-ved` gibi Google ic attribute'lari.
+Budamadan once ve sonra `extract.js` ayni ciktiyi uretiyor (3108 karakter) --
+kucultmek testin dogruladigi seyi degistirmedi. Inline `style` attribute'lari
+KORUNDU; gizli diyaloglarin `display:none` bilgisi orada.
 
 ## Testi calistirma
 

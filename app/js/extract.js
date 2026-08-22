@@ -18,6 +18,21 @@
     return st.visibility !== "hidden" && st.display !== "none";
   };
 
+  // Ekranda cizilmeyen ogeler. isVisible'dan ayri: orada bir kapsayici adayinin
+  // yeterince buyuk olup olmadigina bakiyoruz, burada sadece "cizilmiyor mu".
+  //
+  // Google, cevap kapsayicisinin ICINE gorunmeyen geri bildirim ve yasal
+  // diyaloglari da koyuyor ("Gizlilik Politikamiz", "Bu sohbetin bir kopyasi
+  // eklenecek"...). Bunlar display:none oldugu icin kullanici hicbir zaman
+  // gormuyor, ama walk()/inline() metni DOM'dan topladigi icin cevaba giriyordu.
+  // innerText bunlari kendiliginden eler; biz dugumleri tek tek gezdigimiz icin
+  // elemiyor -- kontrol o yuzden burada. Alt agaci tumden budamak yeterli:
+  // display:none bir ogenin altinda gorunur bir sey olamaz.
+  const isRendered = (el) => {
+    const st = getComputedStyle(el);
+    return st.display !== "none" && st.visibility !== "hidden";
+  };
+
   // Goreli linkleri cozmek icin taban. location.origin bazi baglamlarda (file://,
   // set_content ile yuklenen sayfa) "null" olur ve URL yapicisi taban gecersiz diye
   // ATAR -- bu da mutlak linkler dahil tum atiflarin sessizce dusmesine yol acar.
@@ -76,6 +91,7 @@
       if (n.nodeType === Node.TEXT_NODE) { out += n.nodeValue.replace(/\s+/g, " "); continue; }
       if (n.nodeType !== Node.ELEMENT_NODE) continue;
       if (n.matches && n.matches(NOISE)) continue;
+      if (!isRendered(n)) continue;
       const tag = n.tagName.toLowerCase();
       if (tag === "br") { out += "\n"; continue; }
       const inner = inline(n);
@@ -109,13 +125,23 @@
     return out;
   };
 
-  // NOT: Google, cevabin altina kaynak kartlarini (baslik + snippet + domain) da
-  // ayni kapsayicinin icinde liste olarak koyuyor ve bunlar 'answer' metnine
-  // karisiyor. Ayirmayi denedik ancak bu DOM'da guvenilir bir sinyal yok:
-  // sinif adlari obfuscated, kart ile duzyazi listesi ayni yapida, ve TUM <a>
-  // elemanlarinin metni bos (gorunen metin kardes elemanlarda). Link/metin orani
-  // heuristigi bu yuzden hic tetiklenmiyor. Farkli dil/sorgu fixture'lari
-  // biriktikce yeniden bakilmali.
+  // COZULMEDI: Google, cevabin altina kaynak kartlarini (baslik + snippet +
+  // kaynak adi) da ayni kapsayicinin icinde <ul> olarak koyuyor ve bunlar
+  // 'answer' metnine karisiyor.
+  //
+  // Denenen ve ELENEN ayirt edici: "kart <li>'sinde baglantinin gorunur metni
+  // bostur, duzyazi <li>'sinde doludur". real_ai_mode_tr_sources'ta tam olarak
+  // boyle davraniyor. Ama real_ai_mode_tr'de duzyazi maddelerinin baglantilari
+  // da bos metinli; kural oraya uygulandiginda cevabin govdesini olusturan alti
+  // maddelik listenin (Salesforce, HubSpot, Pipedrive, Zoho, Bitrix24,
+  // monday.com) tamami "kart" sanilip atildi -- markdown 3491 -> 1203 karakter.
+  // Yani iki gercek sayfada kart ile duzyazi YAPISAL olarak ayni; fark yalnizca
+  // obfuscated sinif adlarinda ve ona guvenilmez.
+  //
+  // Bu yanlis tarafa dusmenin bedeli asimetrik: fazladan gurultu birakmak kotu,
+  // gercek cevabi silmek felaket. O yuzden liste tutuluyor. Yeni bir fixture
+  // saglam bir sinyal gosterirse (ornegin karta ozel bir ARIA rolu) yeniden
+  // bakilmali; testi tests/test_extract.py icinde xfail olarak duruyor.
   const withoutNested = (li) => {
     const c = li.cloneNode(true);
     for (const n of c.querySelectorAll(":scope > ul, :scope > ol")) n.remove();
@@ -128,6 +154,7 @@
   const walk = (node, depth) => {
     for (const el of node.children) {
       if (el.matches && el.matches(NOISE)) continue;
+      if (!isRendered(el)) continue;
       const tag = el.tagName.toLowerCase();
 
       if (/^h[1-6]$/.test(tag)) {

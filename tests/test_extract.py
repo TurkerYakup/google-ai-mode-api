@@ -151,9 +151,37 @@ class TestRealFixture:
         assert "Salesforce" in real["markdown"]
         assert "HubSpot" in real["markdown"]
 
+    def test_main_prose_list_survives_intact(self, real):
+        """Cevabin govdesi: alti urunu tanitan madde listesi.
+
+        Bu test bir yanlis duzeltmenin ardindan yazildi. Kaynak kartlarini ayiklamak
+        icin "baglantisinin gorunur metni bos olan <li> karttir" kurali denendi ve
+        bu sayfadaki duzyazi maddelerinin tamami ayni ozelligi tasidigi icin cevabin
+        govdesi silindi (3491 -> 1203 karakter). Yukaridaki iki test bunu yakalamadi:
+        len > 1000 hala saglaniyordu ve 'Salesforce' basliklarda geciyordu. Bir sayi
+        degil, maddelerin kendisi kontrol edilmeli.
+        """
+        urunler = ["Salesforce", "HubSpot CRM", "Pipedrive", "Zoho CRM", "Bitrix24", "monday.com CRM"]
+        items = [it["text"] for b in real["blocks"] if b["type"] == "list" for it in b["items"]]
+        for urun in urunler:
+            assert any(it.startswith(f"**{urun}:**") for it in items), (
+                f"'{urun}' maddesi liste bloklarindan kaybolmus. Mevcut maddeler: "
+                f"{[i[:40] for i in items]}"
+            )
+
     def test_google_ui_chrome_is_not_in_answer(self, real):
         md = real["markdown"]
-        for noise in ("Herkese açık bağlantı", "Arama Sonuçları", "Geri bildirim"):
+        for noise in (
+            "Herkese açık bağlantı",
+            "Arama Sonuçları",
+            "Geri bildirim",
+            # Bu sayfada da gizli (display:none) geri bildirim/yasal diyaloglar var
+            # ve uzun sure fark edilmeden cevaba giriyorlardi; ustteki uc dize
+            # onlari yakalamiyordu.
+            "Gizlilik Politikamız",
+            "Bu sohbetin bir kopyası",
+            "yasal kaldırma talebinde",
+        ):
             assert noise not in md, f"Google arayuz metni cevaba sizmis: {noise}"
 
     def test_citations_extracted(self, real):
@@ -242,3 +270,78 @@ class TestSyntheticFixture:
         headings = [b for b in synthetic["blocks"] if b["type"] == "heading"]
         assert [h["text"] for h in headings][0] == "En iyi CRM yazilimlari"
         assert all(1 <= h["level"] <= 6 for h in headings)
+
+
+# --- gizli arayuz metni + kaynak kartlari ---------------------------------
+
+
+SOURCES = Path(__file__).parent / "fixtures" / "real_ai_mode_tr_sources.html"
+
+
+@pytest.fixture(scope="session")
+def sources(extract):
+    return extract(SOURCES)
+
+
+@pytest.mark.skipif(not SOURCES.exists(), reason="fixture yok")
+class TestHiddenChromeAndSourceCards:
+    """Gercek bir tr AI Mode sayfasi ('Bursa'da yapay zeka destekli otomasyon firmalari').
+
+    Bu fixture iki kusuru birlikte tasidigi icin secildi; ikisi de canli kullanimda
+    yakalandi, testler o yuzden var:
+
+    1. Google, cevap kapsayicisinin icine gorunmeyen (display:none) geri bildirim ve
+       yasal diyaloglari da yerlestiriyor. walk()/inline() gorunurluge hic bakmadigi
+       icin bu metin cevaba giriyordu -- ekranda olmayan bir sey API cevabinda
+       cikiyordu ve stats.characters/words'u sisiriyordu.
+    2. Cevabin altindaki kaynak kartlari (baslik + snippet + kaynak adi) da ayni
+       kapsayicida <ul> olarak duruyor ve cevap metnine karisiyordu.
+    """
+
+    def test_hidden_dialog_text_is_not_in_answer(self, sources):
+        md = sources["markdown"]
+        for noise in (
+            "Gizlilik Politikamız",
+            "Hizmet Şartlarımız",
+            "Bu sohbetin bir kopyası",
+            "yasal kaldırma talebinde",
+            "Bizi bilgilendirdiğiniz için teşekkür",
+        ):
+            assert noise not in md, f"gorunmeyen arayuz metni cevaba sizmis: {noise}"
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "Kaynak kartlari hala cevap metnine karisiyor. Kart ile duzyazi listesi "
+            "elimizdeki iki gercek sayfada yapisal olarak ayirt edilemiyor; "
+            "ayrintili gerekce app/js/extract.js icinde. Bu test gecmeye baslarsa "
+            "guvenilir bir sinyal bulunmus demektir: xfail'i kaldirin."
+        ),
+    )
+    def test_source_card_snippets_are_not_in_answer(self, sources):
+        md = sources["markdown"]
+        for snippet in (
+            "işletmenizi büyütün",          # KA Bilisim kartinin snippet'i
+            "Pilot 3 ayda, ROI 6-9 ay",     # Verodika kartinin snippet'i
+            "Kuruluş vizyonumuz netti",     # Kaitek kartinin snippet'i
+        ):
+            assert snippet not in md, f"kaynak karti metni cevaba sizmis: {snippet}"
+
+    def test_real_answer_content_survives(self, sources):
+        """Kartlari atarken duzyazi listelerini de atmadigimizin guvencesi."""
+        md = sources["markdown"]
+        assert len(md) > 1500
+        for keep in ("Kaitek Yazılım", "MountainTech+", "Verodika", "KA Bilişim"):
+            assert keep in md, f"gercek cevap icerigi kaybolmus: {keep}"
+
+    def test_dropping_cards_does_not_drop_citations(self, sources):
+        """Kartlar metinden cikiyor ama atif olarak kalmali -- linkler oradan geliyor."""
+        domains = {c["domain"] for c in sources["citations"]}
+        assert len(sources["citations"]) >= 8
+        for d in ("kaitek.com.tr", "verodika.com", "mountaintech.plus"):
+            assert d in domains, f"atif kaybolmus: {d}"
+
+    def test_no_google_ui_links_leak_as_citations(self, sources):
+        for c in sources["citations"]:
+            assert "policies.google.com" not in c["url"]
+            assert "support.google.com" not in c["url"]
