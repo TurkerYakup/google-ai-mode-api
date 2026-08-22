@@ -434,11 +434,24 @@ By design, and stated plainly:
 - **AI Mode doesn't always trigger.** Google skips the AI answer for some queries; you get
   `502 no_answer`.
 - **`answer` ends with Google's source cards.** Google places the source cards (title +
-  snippet + domain) inside the same container as the answer. They are not answer prose,
-  but they end up in `answer` and in `stats.words`. We tried to split them out; this DOM
-  offers no reliable signal — class names are obfuscated, a card and a prose list share
-  the same structure, and every `<a>` has empty text. If word count matters to your
-  analysis, drop the trailing list blocks from `blocks`.
+  snippet + source name) inside the same container as the answer. They are not answer
+  prose, but they end up in `answer` and in `stats.words`.
+
+  Separating them has now been attempted twice. The second attempt used what looked like
+  a solid discriminator: in a source card the link's *visible* text is empty — the anchor
+  is an overlay and the words live in sibling nodes — while in a prose bullet the link
+  sits inside the sentence and carries text. It worked perfectly on one captured page.
+  On a second captured page it deleted the body of the answer: there the prose bullets
+  had empty link text too, so six product entries were classified as cards and dropped,
+  taking `answer` from 3491 characters to 1203.
+
+  On the two real pages we hold, a card and a prose bullet are structurally identical;
+  the only thing separating them is obfuscated class names, which change between builds.
+  Being wrong here is asymmetric — leaving noise in is bad, deleting the answer is worse
+  — so the list stays. The test is kept as a strict `xfail`, so if anyone finds a real
+  signal the suite will say so instead of staying quiet.
+
+  If word count matters to your analysis, drop the trailing list blocks from `blocks`.
 - **`follow_ups` is usually empty.** In the verified Turkish capture, AI Mode rendered no
   follow-up suggestions at all — not a single question-shaped element anywhere on the
   page. The code stays in; it may populate in other locales or layouts.

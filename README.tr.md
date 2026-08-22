@@ -438,10 +438,24 @@ Tasarım gereği, açıkça:
 - **`answer` sonunda kaynak kartları yer alır.** Google, cevabın altındaki kaynak
   kartlarını (başlık + snippet + domain) aynı kapsayıcının içine koyuyor; bunlar
   cevabın düz yazısı değil ama `answer` metnine ve `stats.words` sayısına dahil
-  oluyor. Ayırmayı denedik, bu DOM'da güvenilir bir sinyal yok: sınıf adları
-  obfuscated, kart ile düz yazı listesi aynı yapıda ve tüm `<a>` elemanlarının
-  metni boş. Analizde kelime sayısı kritikse `blocks` dizisinin son liste
-  bloklarını dışarıda bırakın.
+  oluyor.
+
+  Ayırmayı iki kez denedik. İkinci denemede sağlam görünen bir ayırt edici vardı:
+  kart içinde bağlantının **görünür** metni boştur — bağlantı kartın üstünü kaplayan
+  bir overlay'dir, yazı kardeş düğümlerde durur — düz yazı maddesinde ise bağlantı
+  cümlenin içindedir ve metni doludur. Yakalanmış bir sayfada kusursuz çalıştı.
+  İkinci bir yakalanmış sayfada cevabın gövdesini sildi: orada düz yazı
+  maddelerinin bağlantıları da boş metinliydi, altı ürün maddesi kart sanılıp
+  atıldı ve `answer` 3491 karakterden 1203'e düştü.
+
+  Elimizdeki iki gerçek sayfada kart ile düz yazı maddesi yapısal olarak aynı;
+  aralarındaki tek fark her derlemede değişen obfuscated sınıf adları. Burada
+  yanlış tarafa düşmenin bedeli asimetrik — fazladan gürültü bırakmak kötü, gerçek
+  cevabı silmek daha kötü — o yüzden liste kalıyor. Test `xfail(strict)` olarak
+  duruyor: biri gerçek bir sinyal bulursa süit sessiz kalmak yerine haber verecek.
+
+  Analizde kelime sayısı kritikse `blocks` dizisinin son liste bloklarını dışarıda
+  bırakın.
 - **Devam soruları (`follow_ups`) çoğu zaman boş döner.** Doğrulanmış Türkçe
   yakalamada AI Mode bu önerileri hiç göstermiyordu — sayfanın tamamında soru
   biçiminde tek bir öğe yoktu. Kod duruyor, farklı dil/düzenlerde dolabilir.
