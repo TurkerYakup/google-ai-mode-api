@@ -28,7 +28,7 @@ MIN_CITATIONS = int(os.getenv("CANARY_MIN_CITATIONS", "1"))
 MIN_CHARS = int(os.getenv("CANARY_MIN_CHARS", "300"))
 
 RUN_HOUR = int(os.getenv("CANARY_HOUR", "4"))
-JITTER_MIN = int(os.getenv("CANARY_JITTER_MIN", "50"))
+JITTER_MIN = int(os.getenv("CANARY_JITTER_MIN", "90"))  # 0-90 min jitter hides daily pattern from Google
 GAP_SEC = int(os.getenv("CANARY_GAP_SEC", "15"))
 TIMEOUT = int(os.getenv("CANARY_TIMEOUT", "180"))
 
@@ -56,25 +56,7 @@ BADGE = {
 
 
 def log(*a):
-    print(dt.datetime.now().isoformat(timespec="seconds"), *a, flush=True)
-
-
-def check_and_update():
-    """Check github for newer check.py, update if different."""
-    script_path = pathlib.Path(__file__)
-    gh_raw = "https://raw.githubusercontent.com/TurkerYakup/google-ai-mode-api/main/canary/check.py"
-    try:
-        req = urllib.request.Request(gh_raw, method="GET")
-        with urllib.request.urlopen(req, timeout=10) as r:
-            remote = r.read().decode("utf-8")
-        local = script_path.read_text(encoding="utf-8")
-        if remote != local:
-            script_path.write_text(remote, encoding="utf-8")
-            log("⬆️  check.py updated from github")
-            return
-        log("✓ check.py is current")
-    except Exception as e:
-        log(f"⚠️  version check failed: {e!r}")
+    print(dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), *a, flush=True)
 
 
 def request(method, url, body=None, headers=None, timeout=TIMEOUT):
@@ -108,7 +90,7 @@ ERROR_MAP = {
     "navigation_timeout":  "network",
     "transport_error":     "network",
     "browser_unavailable": "infra",
-    "no_answer":           "no_answer",
+    "no_answer":           "inconclusive",  # Google's rollout/region — not our bug
     "extract_failed":      "dom_broken",
 }
 
@@ -154,12 +136,21 @@ def probe(query: str) -> dict:
 
 def verdict(results):
     kinds = [r["result"] for r in results]
-    if "ok" in kinds:
+    ok_count = sum(1 for k in kinds if k == "ok")
+
+    # All green
+    if ok_count == len(kinds):
         return "ok"
-    if "fallback" in kinds:
-        return "fallback"
-    if all(k in ("blocked", "network", "infra", "api_error") for k in kinds):
+
+    # Partial or all inconclusive (Google rollout/region, not our bug)
+    if all(k in ("blocked", "network", "infra", "api_error", "inconclusive") for k in kinds):
         return "unverified"
+
+    # Partial fallback (extractor changed, DOM shift) or degraded (low citations/chars)
+    if "fallback" in kinds or "degraded" in kinds:
+        return "fallback"
+
+    # Real extraction failure
     return "broken"
 
 
@@ -201,16 +192,18 @@ def capture_html(query: str):
 
 def publish(status, results):
     if not (GIST_ID and GITHUB_TOKEN):
-        log("  gist ayarlanmamis, yayin atlandi")
+        log("  gist not configured, skipping publish")
         return
     msg, color = BADGE[status]
     today = dt.date.today().strftime("%d %b")
+    ok_count = sum(1 for r in results if r["result"] == "ok")
     payload = {
         "schemaVersion": 1,
         "label": "selectors",
         "message": f"{msg} · {today}",
         "color": color,
         "_checked_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "_ok_ratio": f"{ok_count}/{len(results)}",
         "_results": [{k: r.get(k) for k in ("query", "result", "extracted_by", "citations", "ms")}
                      for r in results],
     }
@@ -228,16 +221,16 @@ def publish(status, results):
         log(f"  gist HATA {code}: {detail}")
 
 
-def notify(title, text):
+def notify(title, text, priority="high", tags="warning"):
     if not NTFY_URL:
         return
     req = urllib.request.Request(
         NTFY_URL, data=text.encode(),
-        headers={"Title": title, "Priority": "high", "Tags": "warning"}, method="POST")
+        headers={"Title": title, "Priority": priority, "Tags": tags}, method="POST")
     try:
         urllib.request.urlopen(req, timeout=20).read()
     except Exception as e:
-        log(f"  ntfy hatasi: {e!r}")
+        log(f"  ntfy error: {e!r}")
 
 
 def rotate_artifacts(max_age_days=30):
@@ -270,7 +263,7 @@ def load_state():
     try:
         return json.loads(STATE.read_text())
     except Exception:
-        return {"status": None, "since": None, "last_alert": None}
+        return {"status": None, "since": None, "last_change": None}
 
 
 def cycle():
@@ -288,41 +281,47 @@ def cycle():
     prev = load_state()
     changed = prev.get("status") != status
 
-    if status in ("broken", "fallback") and changed:
-        bad = ("no_answer", "dom_broken", "degraded", "fallback")
+    # Debounce: don't re-alert within 24h of last state change
+    should_alert = changed and (
+        not prev.get("last_change")
+        or (dt.datetime.fromisoformat(now) - dt.datetime.fromisoformat(prev.get("last_change"))).days >= 1
+    )
+
+    if status in ("broken", "fallback") and should_alert:
+        bad = ("inconclusive", "dom_broken", "degraded", "fallback")
         q = next((r["query"] for r in results if r["result"] in bad), QUERIES[0])
         art = capture_html(q)
         notify(
             f"google-ai-mode-api: {status}",
-            f"{prev.get('status')} -> {status}\n"
+            f"{prev.get('status')} → {status}\n"
             + "\n".join(f"{r['result']}: {r['query']} (extracted_by={r.get('extracted_by')})"
                         for r in results)
             + (f"\nHTML: {art}" if art else ""),
         )
-    elif status == "ok" and prev.get("status") in ("broken", "fallback"):
-        notify("google-ai-mode-api: duzeldi", f"{prev.get('status')} -> ok")
+    elif status == "ok" and prev.get("status") in ("broken", "fallback") and should_alert:
+        notify("google-ai-mode-api: recovered", f"{prev.get('status')} → ok", priority="default", tags="white_check_mark")
 
     publish(status, results)
 
     STATE.write_text(json.dumps({
         "status": status,
         "since": now if changed else (prev.get("since") or now),
-        "last_alert": now if changed else prev.get("last_alert"),
+        "last_change": now if changed else prev.get("last_change"),
     }, indent=2))
 
 
 def sleep_until_next_run():
-    now = dt.datetime.now()
+    now = dt.datetime.now(dt.timezone.utc)
     nxt = now.replace(hour=RUN_HOUR, minute=0, second=0, microsecond=0)
     if nxt <= now:
         nxt += dt.timedelta(days=1)
-    secs = (nxt - now).total_seconds() + random.randint(0, min(JITTER_MIN * 60, 300))  # max 5min jitter
-    log(f"sonraki calisma ~{secs / 3600:.1f} saat sonra ({int(secs % 3600 / 60)} min offset)")
+    jitter_sec = random.randint(0, JITTER_MIN * 60)
+    secs = (nxt - now).total_seconds() + jitter_sec
+    log(f"next run in ~{secs / 3600:.1f} hours ({int(jitter_sec / 60)} min jitter)")
     time.sleep(secs)
 
 
 if __name__ == "__main__":
-    check_and_update()
     if RUN_ONCE or "--once" in sys.argv:
         cycle()
         sys.exit(0)
