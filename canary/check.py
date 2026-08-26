@@ -136,21 +136,24 @@ def probe(query: str) -> dict:
 
 def verdict(results):
     kinds = [r["result"] for r in results]
-    ok_count = sum(1 for k in kinds if k == "ok")
 
-    # All green
-    if ok_count == len(kinds):
-        return "ok"
+    # Filter out non-informative results (transient failures, Google's rollout/region/infra)
+    non_informative = ("blocked", "network", "infra", "api_error", "inconclusive")
+    informative = [k for k in kinds if k not in non_informative]
 
-    # Partial or all inconclusive (Google rollout/region, not our bug)
-    if all(k in ("blocked", "network", "infra", "api_error", "inconclusive") for k in kinds):
+    # All results are non-informative = we can't tell
+    if not informative:
         return "unverified"
 
-    # Partial fallback (extractor changed, DOM shift) or degraded (low citations/chars)
-    if "fallback" in kinds or "degraded" in kinds:
+    # All informative results passed
+    if all(k == "ok" for k in informative):
+        return "ok"
+
+    # Some extractor degradation (rollout, DOM shift)
+    if "fallback" in informative or "degraded" in informative:
         return "fallback"
 
-    # Real extraction failure
+    # Real extraction failure (dom_broken)
     return "broken"
 
 
