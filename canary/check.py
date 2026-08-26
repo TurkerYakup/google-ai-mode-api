@@ -253,28 +253,12 @@ def cycle():
         notify("google-ai-mode-api: duzeldi", f"{prev.get('status')} -> ok")
 
     publish(status, results)
-    healthcheck_ping(status)
 
     STATE.write_text(json.dumps({
         "status": status,
         "since": now if changed else (prev.get("since") or now),
         "last_alert": now if changed else prev.get("last_alert"),
     }, indent=2))
-
-
-def healthcheck_ping(status):
-    hc_uuid = os.getenv("CANARY_HC_UUID", "").strip()
-    if not hc_uuid:
-        return
-    # https://healthchecks.io/docs/http_api/
-    url = f"https://hc-ping.com/{hc_uuid}"
-    if status != "ok":
-        url += "/fail"
-    try:
-        req = urllib.request.Request(url, method="GET")
-        urllib.request.urlopen(req, timeout=10).read()
-    except Exception as e:
-        log(f"  healthcheck ping hatasi: {e!r}")
 
 
 def sleep_until_next_run():
