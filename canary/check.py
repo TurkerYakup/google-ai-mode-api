@@ -221,7 +221,11 @@ def publish(status, results):
                  "X-GitHub-Api-Version": "2022-11-28"},
         timeout=30,
     )
-    log(f"  gist guncellendi ({code})" if code == 200 else f"  gist HATA {code}: {str(body)[:200]}")
+    if code == 200:
+        log(f"  gist guncellendi ({code})")
+    else:
+        detail = str(body)[:200] if isinstance(body, str) else f"HTTP {code}"
+        log(f"  gist HATA {code}: {detail}")
 
 
 def notify(title, text):
@@ -236,6 +240,32 @@ def notify(title, text):
         log(f"  ntfy hatasi: {e!r}")
 
 
+def rotate_artifacts(max_age_days=30):
+    """Delete artifacts older than max_age_days to prevent disk bloat."""
+    if not ARTIFACTS.exists():
+        return
+    now = dt.datetime.now()
+    for artifact in ARTIFACTS.glob("*.html"):
+        try:
+            mtime = dt.datetime.fromtimestamp(artifact.stat().st_mtime)
+            if (now - mtime).days > max_age_days:
+                artifact.unlink()
+        except Exception:
+            pass
+
+
+def rotate_history(max_lines=10000):
+    """Keep history file under control; keep only last N lines."""
+    if not HISTORY.exists():
+        return
+    try:
+        lines = HISTORY.read_text().splitlines(keepends=True)
+        if len(lines) > max_lines:
+            HISTORY.write_text("".join(lines[-max_lines:]))
+    except Exception:
+        pass
+
+
 def load_state():
     try:
         return json.loads(STATE.read_text())
@@ -244,6 +274,8 @@ def load_state():
 
 
 def cycle():
+    rotate_artifacts(max_age_days=30)
+    rotate_history(max_lines=10000)
     log(f"canary basliyor - {len(QUERIES)} sorgu, hedef {API_BASE}")
     status, results = run_probes()
     log(f"  => {status.upper()}")
@@ -284,8 +316,8 @@ def sleep_until_next_run():
     nxt = now.replace(hour=RUN_HOUR, minute=0, second=0, microsecond=0)
     if nxt <= now:
         nxt += dt.timedelta(days=1)
-    secs = (nxt - now).total_seconds() + random.randint(0, JITTER_MIN * 60)
-    log(f"sonraki calisma ~{secs / 3600:.1f} saat sonra")
+    secs = (nxt - now).total_seconds() + random.randint(0, min(JITTER_MIN * 60, 300))  # max 5min jitter
+    log(f"sonraki calisma ~{secs / 3600:.1f} saat sonra ({int(secs % 3600 / 60)} min offset)")
     time.sleep(secs)
 
 
