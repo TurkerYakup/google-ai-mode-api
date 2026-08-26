@@ -5,8 +5,9 @@
 [![Release](https://img.shields.io/github/v/release/TurkerYakup/google-ai-mode-api?color=success)](https://github.com/TurkerYakup/google-ai-mode-api/releases/latest)
 [![CI](https://github.com/TurkerYakup/google-ai-mode-api/actions/workflows/ci.yml/badge.svg)](https://github.com/TurkerYakup/google-ai-mode-api/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Container](https://img.shields.io/badge/ghcr.io-google--ai--mode--api-2496ed?logo=docker&logoColor=white)](https://github.com/TurkerYakup/google-ai-mode-api/pkgs/container/google-ai-mode-api)
-[![DOM selectors](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/TurkerYakup/c28a96e4bdc2acb3954562c72005adff/raw/gam-status.json)](https://gist.github.com/TurkerYakup/c28a96e4bdc2acb3954562c72005adff) — selectors validated against live Google daily at 04:00 UTC
+[![Container](https://img.shields.io/badge/ghcr.io-google--ai--mode--api-2496ed?logo=docker&logoColor=white)](https://github.com/TurkerYakup/google-ai-mode-api/pkgs/container/google-ai-mode-api)  
+[![DOM selectors](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/TurkerYakup/c28a96e4bdc2acb3954562c72005adff/raw/gam-status.json)](https://gist.github.com/TurkerYakup/c28a96e4bdc2acb3954562c72005adff)  
+Selectors validated against live Google daily at 04:00 UTC
 
 🇹🇷 [Türkçe README](README.tr.md)
 
