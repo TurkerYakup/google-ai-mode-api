@@ -59,6 +59,24 @@ def log(*a):
     print(dt.datetime.now().isoformat(timespec="seconds"), *a, flush=True)
 
 
+def check_and_update():
+    """Check github for newer check.py, update if different."""
+    script_path = pathlib.Path(__file__)
+    gh_raw = "https://raw.githubusercontent.com/TurkerYakup/google-ai-mode-api/main/canary/check.py"
+    try:
+        req = urllib.request.Request(gh_raw, method="GET")
+        with urllib.request.urlopen(req, timeout=10) as r:
+            remote = r.read().decode("utf-8")
+        local = script_path.read_text(encoding="utf-8")
+        if remote != local:
+            script_path.write_text(remote, encoding="utf-8")
+            log("⬆️  check.py updated from github")
+            return
+        log("✓ check.py is current")
+    except Exception as e:
+        log(f"⚠️  version check failed: {e!r}")
+
+
 def request(method, url, body=None, headers=None, timeout=TIMEOUT):
     data = json.dumps(body).encode() if body is not None else None
     hdrs = {"Accept": "application/json", "User-Agent": "gam-canary/1"}
@@ -272,6 +290,7 @@ def sleep_until_next_run():
 
 
 if __name__ == "__main__":
+    check_and_update()
     if RUN_ONCE or "--once" in sys.argv:
         cycle()
         sys.exit(0)
