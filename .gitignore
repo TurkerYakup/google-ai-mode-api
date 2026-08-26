@@ -7,10 +7,12 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
-# Tarayici profili ve calisma ciktilari
+# Browser profile and runtime outputs
 data/
 profile/
 artifacts/
+canary/data/
+canary/.build/
 *.log
 *.png
 !docs/*.png
