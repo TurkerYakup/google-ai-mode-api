@@ -1,0 +1,92 @@
+name: Canary freshness
+
+# Watches the watcher.
+#
+# The DOM selectors badge is published by a canary that runs outside this
+# repository. When that canary dies, the gist simply stops changing and the
+# badge keeps serving its last value -- in August 2026 it showed a green
+# "ok" for 35 hours while nothing was being checked at all. A monitor that
+# fails silently is worse than no monitor, so this job reads the badge payload
+# and opens an issue when the last check gets too old.
+#
+# Needs no secrets: the built-in GITHUB_TOKEN can open issues. Note that
+# GitHub disables scheduled workflows after 60 days without repository
+# activity, which is itself a silent failure -- but one that only bites a repo
+# nobody is touching.
+
+on:
+  schedule:
+    - cron: "0 9 * * *"  # after the canary's 04:00-05:30 UTC window
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+env:
+  GIST_RAW: https://gist.githubusercontent.com/TurkerYakup/c28a96e4bdc2acb3954562c72005adff/raw/gam-status.json
+  MAX_AGE_HOURS: "48"
+  LABEL: canary-stale
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read badge age
+        id: age
+        run: |
+          set -euo pipefail
+          # raw.githubusercontent caches hard; a unique query string defeats it,
+          # otherwise this job can read a stale copy and report a false alarm.
+          curl -fsSL "$GIST_RAW?nocache=$GITHUB_RUN_ID" -o status.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime as dt, json, os
+          d = json.load(open("status.json"))
+          checked = dt.datetime.fromisoformat(d["_checked_at"])
+          hours = (dt.datetime.now(dt.timezone.utc) - checked).total_seconds() / 3600
+          print(f"hours={hours:.1f}")
+          print(f"stale={str(hours > float(os.environ['MAX_AGE_HOURS'])).lower()}")
+          print(f"checked_at={d['_checked_at']}")
+          print(f"message={d.get('message', '')}")
+          PY
+
+      - name: Open or close the stale issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STALE: ${{ steps.age.outputs.stale }}
+          HOURS: ${{ steps.age.outputs.hours }}
+          CHECKED: ${{ steps.age.outputs.checked_at }}
+          MESSAGE: ${{ steps.age.outputs.message }}
+        run: |
+          set -euo pipefail
+          # gh issue create validates labels client-side, so the label has to exist.
+          gh label create "$LABEL" --color BFD4F2 \
+            --description "Badge is not being refreshed" --force >/dev/null
+
+          num=$(gh issue list --label "$LABEL" --state open --limit 1 \
+                  --json number --jq '.[0].number // empty')
+
+          if [ "$STALE" = "true" ]; then
+            body=$(cat <<EOF
+          The DOM selectors badge has not been refreshed for **${HOURS} hours**.
+
+          - Last check: \`${CHECKED}\`
+          - Badge currently reads: \`${MESSAGE}\`
+
+          The canary runs outside this repository, so a frozen badge means the
+          canary itself is down. Whatever colour the badge shows right now is
+          stale, not current.
+
+          <sub>Opened automatically by the canary freshness job.</sub>
+          EOF
+          )
+            if [ -n "$num" ]; then
+              gh issue comment "$num" --body "$body"
+            else
+              gh issue create --title "Canary has not reported for ${HOURS}h" \
+                --label "$LABEL" --body "$body"
+            fi
+          elif [ -n "$num" ]; then
+            gh issue comment "$num" \
+              --body "Canary is reporting again (last check \`${CHECKED}\`, ${HOURS}h ago)."
+            gh issue close "$num"
+          fi
