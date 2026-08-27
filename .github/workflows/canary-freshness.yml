@@ -18,13 +18,20 @@ on:
   schedule:
     - cron: "0 9 * * *"  # after the canary's 04:00-05:30 UTC window
   workflow_dispatch:
+    inputs:
+      max_age_hours:
+        description: "Hours before a badge counts as stale. Set to 0 to exercise the alert path."
+        default: "48"
 
 permissions:
   issues: write
 
 env:
   GIST_RAW: https://gist.githubusercontent.com/TurkerYakup/c28a96e4bdc2acb3954562c72005adff/raw/gam-status.json
-  MAX_AGE_HOURS: "48"
+  # An alert path nobody has ever run is not an alert path. The threshold is an
+  # input so it can be driven to 0 on demand, without a commit, to prove the
+  # job still opens and closes the issue. Schedule runs get the default.
+  MAX_AGE_HOURS: ${{ inputs.max_age_hours || '48' }}
   LABEL: canary-stale
 
 jobs:
