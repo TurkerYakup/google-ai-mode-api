@@ -11,8 +11,12 @@ __pycache__/
 data/
 profile/
 artifacts/
-canary/data/
-canary/.build/
 *.log
 *.png
 !docs/*.png
+
+# Maintainer-only DOM canary. Runs as its own container against my deployment
+# and is wired to my gist and this repo's issues, so it is nothing a user can
+# run. Never was part of the published image either -- the Dockerfile only
+# copies app/ and scripts/.
+canary/
