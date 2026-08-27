@@ -52,6 +52,9 @@ jobs:
       - name: Open or close the stale issue
         env:
           GH_TOKEN: ${{ github.token }}
+          # This job checks out nothing, so gh cannot infer the repo from a git
+          # remote and every call fails with "not a git repository".
+          GH_REPO: ${{ github.repository }}
           STALE: ${{ steps.age.outputs.stale }}
           HOURS: ${{ steps.age.outputs.hours }}
           CHECKED: ${{ steps.age.outputs.checked_at }}
