@@ -136,6 +136,11 @@ Or quickly via GET:
 curl "http://127.0.0.1:8000/v1/query?q=best+crm&track_domains=yoursite.com,competitor.com"
 ```
 
+Or from a browser: **<http://127.0.0.1:8000/>** serves a one-page form — query, device,
+tracked domains and brands, with the answer, citations and domain table rendered. It is
+the fastest way to see whether the service works before wiring anything up. (`/docs` is
+the generated OpenAPI reference; this is a playground, not the same thing.)
+
 ### Async tasks (recommended)
 
 An AI Mode answer streams in a measured ~10-15 s, sometimes longer. For keyword sets or
@@ -193,12 +198,40 @@ clients send) and `X-API-Key` are accepted.
 > Clients cannot tell the difference, but time-to-first-token is the full query latency —
 > around 10–15 s, not the sub-second a real model gives you.
 
+#### Without the OpenAI shape: `mode: "llm"`
+
+If you want the answer but none of the SEO analysis, and you would rather not speak the
+chat-completions protocol, pass `mode: "llm"` to `/v1/query` (works on the GET form too,
+and on batches and tasks):
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/v1/query \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "how does a heat pump work", "mode": "llm"}'
+```
+
+```jsonc
+{
+  "status": "ok",
+  "query": "how does a heat pump work",
+  "answer": "A heat pump moves heat rather than generating it…",
+  "sources": [{"title": "…", "url": "https://…", "domain": "energy.gov"}],
+  "follow_ups": ["What does a heat pump cost to run?"],
+  "cached": false, "truncated": false, "elapsed_ms": 11840
+}
+```
+
+`blocks`, `domains`, `tracked_domains`, `tracked_brands` and `stats` are not computed at
+all — this is cheaper, not just quieter. The default is `mode: "seo"`, the full output
+documented above.
+
 ---
 
 ## Endpoints
 
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/` | One-page browser playground (not in `/docs` — it is a form, not an API) |
 | `GET` | `/health` | Status, browser pools, pending task count |
 | `POST` | `/v1/query` | Single query, synchronous |
 | `GET` | `/v1/query?q=…` | Single query, synchronous, convenience form |
@@ -269,6 +302,7 @@ In batch responses each item carries its own error under `items[].error` with th
 | `include_follow_ups` | — | `true` | Suggested follow-up questions |
 | `timeout` | — | `GAM_ANSWER_TIMEOUT` | 5–300 s |
 | `cache` | — | `true` | Reuse a recent identical query |
+| `mode` | — | `seo` | `seo` = full analysis \| `llm` = answer + sources only, [see above](#without-the-openai-shape-mode-llm) |
 
 The aliases exist so an existing DataForSEO integration can point here with minimal edits:
 `keyword`, `language_code`, `location_name` and `se_domain` are all accepted.
@@ -289,7 +323,9 @@ Everything is a `GAM_`-prefixed environment variable (`.env`). Full list in
 | `GAM_CACHE_TTL` | `900` | `0` disables the cache |
 | `GAM_BATCH_DELAY` | `2.5` | Pause between queries in a batch |
 | `GAM_CONSENT_CHOICE` | `reject` | Cookie banner default: **reject all** |
+| `GAM_USER_AGENT` | *(a Chrome 131 desktop string)* | Per-device UA; `GAM_MOBILE_USER_AGENT` for `device=mobile` |
 | `GAM_ANSWER_SELECTORS` | *(see config)* | Override as a JSON array when Google's DOM shifts |
+| `GAM_RESOLVE_REDIRECTS` | `true` | Follow Google's `/goto?url=…` citation wrappers to the real address. Off ⇒ those citations are dropped |
 
 ---
 
@@ -502,11 +538,26 @@ pip install -r requirements.txt && playwright install chromium
 uvicorn app.main:app --reload
 ```
 
-Tests cover the pure analysis functions and need no browser:
-
 ```bash
 pytest -q
 ```
+
+**No test sends a request to Google.** The extraction tests run `extract.js` in a real
+Chromium against saved pages served from `tests/fixtures/` (a real browser, because the
+code needs `getComputedStyle`/`getBoundingClientRect`); they skip if Chromium is not
+installed. The rest are pure functions and need nothing.
+
+To exercise the live path, there is a separate script — it does spend real Google queries:
+
+```bash
+docker compose cp scripts/smoke_live.py google-ai-mode-api:/tmp/smoke_live.py
+docker compose exec google-ai-mode-api python /tmp/smoke_live.py
+```
+
+It walks about ten paths the unit tests cannot reach (real query, batch, tasks with a
+postback to a local listener, the OpenAI endpoints, cache behaviour), spends ~10 queries,
+and **stops at the first `blocked`** rather than hammering a flagged IP. Run it inside the
+container: the postback test binds `127.0.0.1`.
 
 ```
 app/
@@ -514,11 +565,13 @@ app/
   scraper.py    Drives the page, waits for streaming, extracts
   browser.py    Persistent Chromium profile per device + page pool
   js/extract.js DOM → blocks + markdown + citations
+  redirects.py  Resolves Google's /goto citation wrappers to real addresses
   analysis.py   Domain share, brand tracking, stats
   tasks.py      Async task queue + postback
   cache.py      TTL cache
   uule.py       Location encoding
-scripts/login.py  Visible browser for preparing the profile
+scripts/login.py       Visible browser for preparing the profile
+scripts/smoke_live.py  Live smoke test against a running instance
 ```
 
 ---

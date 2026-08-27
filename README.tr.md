@@ -137,6 +137,11 @@ Hızlı deneme için GET:
 curl "http://127.0.0.1:8000/v1/query?q=en+iyi+crm&track_domains=siteniz.com,rakip.com"
 ```
 
+Ya da tarayıcıdan: **<http://127.0.0.1:8000/>** tek sayfalık bir form sunar — sorgu, cihaz,
+takip edilen domain ve markalar; cevap, atıflar ve domain tablosu ekranda. Bir şey bağlamadan
+önce servisin çalıştığını görmenin en hızlı yolu. (`/docs` üretilen OpenAPI referansıdır,
+bu ondan farklı: burası deneme alanı.)
+
 ### Async görev (önerilen)
 
 AI Mode cevabı ölçülen ~10-15 sn akar, uç durumda daha uzun. Uzun keyword kümelerinde ya da
@@ -194,12 +199,40 @@ gönderdiği) hem `X-API-Key` kabul edilir.
 > parçaya kadar geçen süre sorgunun tam gecikmesidir — gerçek bir modelin verdiği saniye
 > altı değil, ~10-15 saniye.
 
+#### OpenAI biçimi olmadan: `mode: "llm"`
+
+Cevabı isteyip SEO analizinin hiçbirini istemiyorsanız ve chat-completions protokolünü
+konuşmak istemiyorsanız `/v1/query`'ye `mode: "llm"` geçin (GET biçiminde, toplu istekte
+ve görevlerde de çalışır):
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/v1/query \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "ısı pompası nasıl çalışır", "mode": "llm"}'
+```
+
+```jsonc
+{
+  "status": "ok",
+  "query": "ısı pompası nasıl çalışır",
+  "answer": "Isı pompası ısıyı üretmez, taşır…",
+  "sources": [{"title": "…", "url": "https://…", "domain": "enerji.gov.tr"}],
+  "follow_ups": ["Isı pompasının işletme maliyeti nedir?"],
+  "cached": false, "truncated": false, "elapsed_ms": 11840
+}
+```
+
+`blocks`, `domains`, `tracked_domains`, `tracked_brands` ve `stats` hiç hesaplanmaz —
+yani sadece daha sessiz değil, daha ucuz. Varsayılan `mode: "seo"`, yukarıda anlatılan
+tam çıktı.
+
 ---
 
 ## Uçlar
 
 | Method | Yol | Açıklama |
 |---|---|---|
+| `GET` | `/` | Tarayıcıdan deneme formu (`/docs`'ta görünmez — API değil, form) |
 | `GET` | `/health` | Durum, tarayıcı havuzları, bekleyen görev sayısı |
 | `POST` | `/v1/query` | Tek sorgu, senkron |
 | `GET` | `/v1/query?q=…` | Tek sorgu, senkron, pratik biçim |
@@ -270,6 +303,7 @@ ile taşır, toplu isteğin kendisi yine `200` döner.
 | `include_follow_ups` | — | `true` | Önerilen devam soruları |
 | `timeout` | — | `GAM_ANSWER_TIMEOUT` | 5–300 sn |
 | `cache` | — | `true` | Yakın zamanlı aynı sorguyu tekrar sormaz |
+| `mode` | — | `seo` | `seo` = tam analiz \| `llm` = sadece cevap + kaynaklar, [yukarı bakın](#openai-biçimi-olmadan-mode-llm) |
 
 Alias'lar, mevcut bir DataForSEO entegrasyonunu az değişiklikle buraya yöneltebilmeniz için:
 `keyword`, `language_code`, `location_name` ve `se_domain` da kabul edilir.
@@ -290,7 +324,9 @@ Tüm ayarlar `GAM_` önekli ortam değişkeni (`.env`). Tam liste: [.env.example
 | `GAM_CACHE_TTL` | `900` | `0` = önbellek kapalı |
 | `GAM_BATCH_DELAY` | `2.5` | Toplu sorguda aralardaki bekleme |
 | `GAM_CONSENT_CHOICE` | `reject` | Çerez bannerı varsayılanı: **tümünü reddet** |
+| `GAM_USER_AGENT` | *(Chrome 131 masaüstü dizesi)* | Cihaz başına UA; `device=mobile` için `GAM_MOBILE_USER_AGENT` |
 | `GAM_ANSWER_SELECTORS` | *(config'e bkz.)* | Google DOM'u değişince JSON dizi ile ezin |
+| `GAM_RESOLVE_REDIRECTS` | `true` | Google'ın `/goto?url=…` atıf sarmalını gerçek adrese çözer. Kapalıysa o atıflar düşer |
 
 ---
 
@@ -501,11 +537,26 @@ pip install -r requirements.txt && playwright install chromium
 uvicorn app.main:app --reload
 ```
 
-Testler saf analiz fonksiyonlarını kapsar, tarayıcı gerektirmez:
-
 ```bash
 pytest -q
 ```
+
+**Hiçbir test Google'a istek atmaz.** Ayıklama testleri `extract.js`'i gerçek bir
+Chromium'da, `tests/fixtures/` altındaki kayıtlı sayfalar üzerinde çalıştırır (gerçek
+tarayıcı, çünkü kod `getComputedStyle`/`getBoundingClientRect` istiyor); Chromium kurulu
+değilse atlanır. Geri kalanı saf fonksiyon, hiçbir şey gerektirmez.
+
+Canlı yolu denemek için ayrı bir betik var — o gerçekten Google sorgusu harcar:
+
+```bash
+docker compose cp scripts/smoke_live.py google-ai-mode-api:/tmp/smoke_live.py
+docker compose exec google-ai-mode-api python /tmp/smoke_live.py
+```
+
+Birim testlerin ulaşamadığı ~10 yolu sırayla dener (gerçek sorgu, toplu istek, yerel bir
+dinleyiciye postback'li görev, OpenAI uçları, önbellek davranışı), ~10 sorgu harcar ve
+**ilk `blocked` hatasında durur** — işaretlenmiş bir IP'ye istek yağdırmanın faydası yok.
+Container içinde çalıştırın: postback testi `127.0.0.1`'e bağlanıyor.
 
 ```
 app/
@@ -513,11 +564,13 @@ app/
   scraper.py    Sayfayı sürer, akışın bitmesini bekler, ayıklar
   browser.py    Cihaz başına kalıcı Chromium profili + sayfa havuzu
   js/extract.js DOM → blok + markdown + atıf
+  redirects.py  Google'ın /goto atıf sarmallarını gerçek adrese çözer
   analysis.py   Domain payı, marka takibi, istatistikler
   tasks.py      Async görev kuyruğu + postback
   cache.py      TTL önbellek
   uule.py       Konum kodlaması
-scripts/login.py  Profili hazırlamak için görünür tarayıcı
+scripts/login.py       Profili hazırlamak için görünür tarayıcı
+scripts/smoke_live.py  Çalışan bir örneğe karşı canlı duman testi
 ```
 
 ---
