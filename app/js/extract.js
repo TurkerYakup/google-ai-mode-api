@@ -38,14 +38,14 @@
   // ATAR -- bu da mutlak linkler dahil tum atiflarin sessizce dusmesine yol acar.
   const BASE = location.origin && location.origin !== "null" ? location.origin : "https://www.google.com";
 
-  const unwrap = (href) => {
-    try {
-      const u = new URL(href, BASE);
-      if (u.pathname === "/url" && u.searchParams.get("q")) return u.searchParams.get("q");
-      if (u.hostname.endsWith("google.com") && u.searchParams.get("url")) return u.searchParams.get("url");
-      return u.href;
-    } catch (e) { return null; }
-  };
+  // Google atif linklerini iki semada veriyor:
+  //   eski: /url?q=<gercek url>  ya da  google.com/...?url=<gercek url>
+  //   yeni: /goto?url=<imzali blob>   (2026-08'de bu semaya gecti)
+  // Yeni semada hedef URL sayfanin HICBIR yerinde duz metin olarak yok -- blob imzali,
+  // yalnizca Google'in yonlendirmesi cozebiliyor. Bu yollari taniyip sarmali oldugu gibi
+  // tasiyoruz; 302'yi takip edip gercek adresi bulmak Python katmaninin isi
+  // (app/redirects.py).
+  const REDIRECT_PATHS = new Set(["/goto", "/url"]);
 
   const hostOf = (href) => {
     try { return new URL(href).hostname.replace(/^www\./, ""); } catch (e) { return null; }
@@ -112,15 +112,39 @@
     return out;
   };
 
+  // Bir <a>'dan atif uretir; atif degilse null. Uc sonuc var:
+  //   dis link            -> {title, url, domain}
+  //   cozulebilen sarmal  -> {title, url: <gercek url>, domain}
+  //   cozulemeyen sarmal  -> {title, url: <sarmal>, domain: null, redirect: true}
+  const linkFrom = (a) => {
+    let u;
+    try { u = new URL(a.getAttribute("href"), BASE); } catch (e) { return null; }
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+
+    const label = () => clean(a.innerText) || clean(a.getAttribute("aria-label") || "");
+    const host = hostOf(u.href);
+    if (isExternal(host)) return { title: label() || host, url: u.href, domain: host };
+
+    // Google'in kendi alan adi: ya bir yonlendirme sarmali ya da arayuz linki.
+    const target = u.searchParams.get("q") || u.searchParams.get("url");
+    if (!target) return null;
+    if (/^https?:/.test(target)) {
+      const h = hostOf(target);
+      return isExternal(h) ? { title: label() || h, url: target, domain: h } : null;
+    }
+    // Parametre gercek bir URL degil: imzali blob mu, yoksa /search?q=... gibi bir
+    // arayuz linki mi? Yolu bilinen bir yonlendirme yolu degilse atif sayilmaz.
+    if (!REDIRECT_PATHS.has(u.pathname)) return null;
+    return { title: label(), url: u.href, domain: null, redirect: true };
+  };
+
   const linksIn = (node) => {
     const seen = new Set(), out = [];
     for (const a of node.querySelectorAll("a[href]")) {
-      const href = unwrap(a.getAttribute("href"));
-      if (!href || !/^https?:/.test(href)) continue;
-      const host = hostOf(href);
-      if (!isExternal(host) || seen.has(href)) continue;
-      seen.add(href);
-      out.push({ title: clean(a.innerText) || clean(a.getAttribute("aria-label") || "") || host, url: href, domain: host });
+      const link = linkFrom(a);
+      if (!link || seen.has(link.url)) continue;
+      seen.add(link.url);
+      out.push(link);
     }
     return out;
   };

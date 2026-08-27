@@ -110,6 +110,17 @@ class Settings(BaseSettings):
     """Google DOM'u degistiginde GAM_ANSWER_SELECTORS ile JSON liste olarak ezilebilir.
     Hicbiri tutmazsa en buyuk metin blogu heuristigine dusulur."""
 
+    resolve_redirects: bool = True
+    """Google, atif linklerini `/goto?url=<imzali blob>` ile sariyor ve hedef adres
+    sayfanin hicbir yerinde duz metin olarak durmuyor (bkz. app/redirects.py). Acikken
+    her benzersiz sarmal icin Google'a bir istek atilir (302 -> Location) ve gercek
+    alan adi boylece ogrenilir; sayfa basina tek haneli istek demek.
+
+    Kapatilirsa cozulemeyen atiflar sonuctan DUSER -- domain'i 'google.com' olan bir
+    atif domain istatistiklerini sessizce bozardi."""
+    redirect_timeout: float = 10.0
+    """Tek bir atif yonlendirmesi icin ust sinir (saniye)."""
+
 
 @lru_cache
 def get_settings() -> Settings:

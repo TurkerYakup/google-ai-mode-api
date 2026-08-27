@@ -106,6 +106,12 @@ class TestAnyFixture:
         for c in r["citations"]:
             assert c["url"].startswith("http"), f"gecersiz URL: {c['url']}"
             assert "/url?q=" not in c["url"], "Google yonlendirme linki cozulmemis"
+            if c.get("redirect"):
+                # Imzali `/goto` sarmali: hedef adres sayfada yok, 302'yi takip edip
+                # dolduran app/redirects.py. Buradaki sozlesme sadece "domain bos
+                # birakildi ve isaretlendi" -- bos string veya google.com degil.
+                assert c["domain"] is None, f"cozulmemis sarmalin domain'i dolu: {c}"
+                continue
             assert not c["domain"].endswith("google.com"), f"Google linki atif sayilmis: {c['url']}"
             assert not c["domain"].startswith("www."), f"www. soyulmamis: {c['domain']}"
 
@@ -345,3 +351,57 @@ class TestHiddenChromeAndSourceCards:
         for c in sources["citations"]:
             assert "policies.google.com" not in c["url"]
             assert "support.google.com" not in c["url"]
+
+
+# --- /goto sarmali (Google'in yeni atif semasi) ---------------------------
+
+
+GOTO = Path(__file__).parent / "fixtures" / "real_ai_mode_goto_links.html"
+
+
+@pytest.fixture(scope="session")
+def goto(extract):
+    return extract(GOTO)
+
+
+@pytest.mark.skipif(not GOTO.exists(), reason="fixture yok")
+class TestGotoRedirects:
+    """Gercek bir sayfa ('best crm software', 2026-08-27), yeni atif semasiyla.
+
+    Kanaryanin yakaladigi kirilma bu fixture'da duruyor: cevap metni, bloklar ve
+    kapsayici selector'u saglamken UC sorgunun ucunde de sifir atif cikti. Sebep dar
+    bir yerdeydi -- Google `/url?q=<gercek url>` yerine `/goto?url=<imzali blob>`
+    vermeye basladi; linkin host'u www.google.com oldugu icin hepsi 'ic link' sanilip
+    eleniyordu. Hedef adres sayfanin hicbir yerinde yok, o yuzden extract.js sarmali
+    isaretleyip birakiyor ve app/redirects.py 302'yi takip ediyor.
+    """
+
+    def test_primary_selector_still_matches_google(self, goto):
+        assert goto["how"] == 'selector:div[data-subtree="aimc"]'
+
+    def test_answer_survives(self, goto):
+        # Kirilmanin dar oldugunun guvencesi: metin tarafi zaten calisiyordu.
+        assert len(goto["markdown"]) > 1000
+        for urun in ("HubSpot Sales Hub", "Salesforce / Agentforce", "Pipedrive", "Zoho CRM"):
+            assert urun in goto["markdown"]
+
+    def test_goto_wrappers_are_kept_as_citations(self, goto):
+        """Asil regression: bu sayfa duzeltmeden once sifir atif uretiyordu."""
+        assert len(goto["citations"]) == 3, "sayfada Google'in kendi saydigi 3 kaynak var"
+        for c in goto["citations"]:
+            assert c["redirect"] is True
+            assert c["domain"] is None
+            assert "/goto?url=" in c["url"]
+            assert c["url"].startswith("https://www.google.com/"), "sarmal mutlak URL olmali"
+
+    def test_wrappers_reach_block_links_too(self, goto):
+        """blocks[].links projenin ayirt edici ciktisi; sarmallar oraya da girmeli."""
+        items = [it for b in goto["blocks"] if b["type"] == "list" for it in b["items"]]
+        hubspot = next(it for it in items if it["text"].startswith("**HubSpot Sales Hub:**"))
+        assert [l["redirect"] for l in hubspot["links"]] == [True]
+
+    def test_google_ui_links_are_still_dropped(self, goto):
+        """`/goto` yolunu tanimak, google.com'daki her linki atif yapmak demek degil."""
+        for c in goto["citations"]:
+            for ui in ("/search?", "policies.google.com", "support.google.com"):
+                assert ui not in c["url"]

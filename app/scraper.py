@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 from playwright.async_api import Error as PWError
 from playwright.async_api import Page, TimeoutError as PWTimeout
 
+from . import redirects
 from .analysis import answer_stats, build_citations, domain_stats, track_brands, track_domains
 from .config import Settings
 from .models import Block, QueryOptions, QueryResult
@@ -125,6 +126,25 @@ async def _wait_for_answer(page: Page, s: Settings, timeout: float) -> tuple[boo
     return True, last_text
 
 
+async def _resolve_citation_redirects(page: Page, data: Dict[str, Any], s: Settings) -> None:
+    """Google'in `/goto?url=<blob>` atif sarmallarini gercek adrese cevirir (yerinde).
+
+    Kapali olsa bile apply() cagrilir: cozulmemis bir sarmalin domain'i None ve boyle
+    bir kayit ne Link modelinden gecer ne de bir ise yarar; dusmesi gerekir.
+    """
+    pending = redirects.pending_urls(data) if s.resolve_redirects else []
+    resolved = await redirects.resolve(page, pending, s.redirect_timeout) if pending else {}
+    dropped = redirects.apply(data, resolved)
+    if pending:
+        log.info("Atif yonlendirmesi: %d/%d cozuldu", len(resolved), len(pending))
+    if dropped:
+        log.warning(
+            "%d atif cozulemedigi icin dusuruldu%s",
+            dropped,
+            "" if s.resolve_redirects else " (GAM_RESOLVE_REDIRECTS kapali)",
+        )
+
+
 async def scrape(page: Page, query: str, opts: QueryOptions, s: Settings) -> QueryResult:
     started = time.monotonic()
     timeout = opts.timeout or s.answer_timeout
@@ -156,6 +176,8 @@ async def scrape(page: Page, query: str, opts: QueryOptions, s: Settings) -> Que
             "GAM_DEBUG_ENDPOINTS=true ile /v1/debug/html ciktisina bakip "
             "GAM_ANSWER_SELECTORS'i guncelleyin.",
         )
+
+    await _resolve_citation_redirects(page, data, s)
 
     answer: str = data["markdown"]
     citations = build_citations(data.get("citations") or [])
