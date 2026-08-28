@@ -145,6 +145,31 @@ async def _resolve_citation_redirects(page: Page, data: Dict[str, Any], s: Setti
         )
 
 
+def analyse(data: Dict[str, Any], opts: QueryOptions) -> Dict[str, Any]:
+    """Ayiklama ciktisindan SEO/GEO katmanini uretir. QueryResult'a olduğu gibi girer.
+
+    scrape()'in icinden ayri durmasinin sebebi test edilebilirlik: burasi tarayici
+    gerektirmeyen tek katman, ve projenin asil sattigi cikti (domain payi, marka
+    gecisleri, iddia-kaynak eslemesi) burada uretiliyor. Kaydedilmis bir sayfa
+    uzerinde birebir kosturulabiliyor -- bkz. tests/test_pipeline.py.
+    """
+    answer: str = data["markdown"]
+    citations = build_citations(data.get("citations") or [])
+    raw_blocks = data.get("blocks") or []
+    # 'llm' modunda cevap ve kaynaklar disindaki SEO analizleri hesaplanmaz.
+    seo = opts.mode == "seo"
+    return {
+        "answer": answer,
+        "citations": citations,
+        "blocks": [Block(**b) for b in raw_blocks] if (seo and opts.include_blocks) else None,
+        "domains": domain_stats(citations) if seo else [],
+        "follow_ups": (data.get("follow_ups") or []) if opts.include_follow_ups else [],
+        "tracked_domains": track_domains(citations, opts.track_domains) if seo else [],
+        "tracked_brands": track_brands(answer, opts.track_brands) if seo else [],
+        "stats": answer_stats(answer, citations, len(raw_blocks)),
+    }
+
+
 async def scrape(page: Page, query: str, opts: QueryOptions, s: Settings) -> QueryResult:
     started = time.monotonic()
     timeout = opts.timeout or s.answer_timeout
@@ -179,11 +204,7 @@ async def scrape(page: Page, query: str, opts: QueryOptions, s: Settings) -> Que
 
     await _resolve_citation_redirects(page, data, s)
 
-    answer: str = data["markdown"]
-    citations = build_citations(data.get("citations") or [])
-    raw_blocks = data.get("blocks") or []
-    # 'llm' modunda cevap ve kaynaklar disindaki SEO analizleri hesaplanmaz.
-    seo = opts.mode == "seo"
+    parts = analyse(data, opts)
 
     screenshot = None
     if opts.include_screenshot:
@@ -195,14 +216,7 @@ async def scrape(page: Page, query: str, opts: QueryOptions, s: Settings) -> Que
 
     return QueryResult(
         query=query,
-        answer=answer,
-        blocks=[Block(**b) for b in raw_blocks] if (seo and opts.include_blocks) else None,
-        citations=citations,
-        domains=domain_stats(citations) if seo else [],
-        follow_ups=(data.get("follow_ups") or []) if opts.include_follow_ups else [],
-        tracked_domains=track_domains(citations, opts.track_domains) if seo else [],
-        tracked_brands=track_brands(answer, opts.track_brands) if seo else [],
-        stats=answer_stats(answer, citations, len(raw_blocks)),
+        **parts,
         source_url=url,
         device=opts.device,
         hl=opts.hl or s.hl,
