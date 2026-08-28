@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Gecelik kosu: testler kaydedilmis sayfalar uzerinde calisiyor, yani push
+  # olmadan da kirilabilirler -- bagimlilik guncellemesi, Chromium surumu,
+  # pydantic davranis degisikligi. Google'a istek gitmez, maliyeti bir CI dakikasi.
+  # (GitHub, 60 gun deponun hic dokunulmadigi durumda zamanlanmis is'leri durdurur.)
+  schedule:
+    - cron: "0 3 * * *"
 
 jobs:
   test:
