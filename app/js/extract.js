@@ -112,6 +112,39 @@
     return out;
   };
 
+  // walk() yalnizca ELEMENT cocuklari geziyor (node.children), dolayisiyla bir
+  // ogenin DOGRUDAN altindaki metin dugumleri recurse edildiginde sessizce dusuyor.
+  // Google'in cevap govdesi tam olarak boyle: sarmalayici bir <p> yok, vurgular
+  // <strong>/<mark> ile sarili ve aralarindaki cumle govdesi ciplak text node.
+  // Recurse edilince geriye yalnizca vurgular kaliyordu -- her biri ayri paragraf,
+  // cumlenin govdesi ise hic cikmiyordu ("MountainTech+" / "2021 yilinda" /
+  // "... sirketidir", aradaki "kurulan, merkez ofisi ..." yok).
+  //
+  // Cozum, boyle ogeleri recurse etmek yerine yaprak dalina dusurmek: inline()
+  // text dugumlerini zaten dogru topluyor.
+  const BLOCKISH = "p,ul,ol,table,pre,h1,h2,h3,h4,h5,h6";
+
+  const hasOwnText = (el) => {
+    for (const n of el.childNodes) {
+      if (n.nodeType === Node.TEXT_NODE && n.nodeValue.trim()) return true;
+    }
+    return false;
+  };
+
+  // Blok seviyesinde cocugu olan bir oge tek paragraf olarak okunamaz (ozellikle
+  // liste ve tablo); orada recurse etmek dogru olan. Yalnizca satir ici cocuklari
+  // olanlar tek bir paragraf.
+  const inlineOnly = (el) => {
+    for (const c of el.children) {
+      if (c.matches && c.matches(NOISE)) continue;
+      if (!isRendered(c)) continue;
+      if (c.matches && c.matches(BLOCKISH)) return false;
+      const display = getComputedStyle(c).display;
+      if (display && !display.startsWith("inline") && display !== "contents") return false;
+    }
+    return true;
+  };
+
   // Bir <a>'dan atif uretir; atif degilse null. Uc sonuc var:
   //   dis link            -> {title, url, domain}
   //   cozulebilen sarmal  -> {title, url: <gercek url>, domain}
@@ -149,6 +182,25 @@
     return out;
   };
 
+  // Google, cevabin icine yerel isletme kartlarini <ul> ile degil
+  // div[role="list"] > div[role="listitem"] ile koyuyor. walk() yalnizca gercek
+  // <ul>/<ol> etiketini liste sayiyordu, dolayisiyla bu karuselin icine dalip her
+  // yapragi ayri paragraf yapiyordu: "Yol tarifi" / "Web sitesi" / "Yol tarifi"...
+  // Kart basina iki gurultu blogu, firma adi ise kartla birlikte dagiliyordu.
+  //
+  // ARIA rolleri obfuscated sinif adlarinin aksine anlamsal bir sozlesme; kart ile
+  // duzyaziyi ayirmak icin guvenilebilecek tek sinyal bu (bkz. asagidaki kaynak
+  // karti notu -- orada boyle bir rol YOKTU, burada var).
+  const NESTED_LIST = ':scope > ul, :scope > ol, :scope > [role="list"]';
+
+  const isListEl = (el) => {
+    const t = el.tagName.toLowerCase();
+    return t === "ul" || t === "ol" || el.getAttribute("role") === "list";
+  };
+
+  const isItemEl = (el) =>
+    el.tagName.toLowerCase() === "li" || el.getAttribute("role") === "listitem";
+
   // COZULMEDI: Google, cevabin altina kaynak kartlarini (baslik + snippet +
   // kaynak adi) da ayni kapsayicinin icinde <ul> olarak koyuyor ve bunlar
   // 'answer' metnine karisiyor.
@@ -168,7 +220,7 @@
   // bakilmali; testi tests/test_extract.py icinde xfail olarak duruyor.
   const withoutNested = (li) => {
     const c = li.cloneNode(true);
-    for (const n of c.querySelectorAll(":scope > ul, :scope > ol")) n.remove();
+    for (const n of c.querySelectorAll(NESTED_LIST)) n.remove();
     return c;
   };
 
@@ -189,14 +241,14 @@
         const text = clean(inline(el));
         if (text) blocks.push({ type: "paragraph", text, links: linksIn(el) });
 
-      } else if (tag === "ul" || tag === "ol") {
+      } else if (isListEl(el)) {
         // Ic ice listeler tek bir blokta, 'depth' ile toplanir. Ayri blok olarak
         // yazilsalardi alt maddeler ait olduklari ust maddeden once cikardi.
         const items = [];
         const collect = (listEl, d) => {
           for (const li of listEl.children) {
-            if (li.tagName.toLowerCase() !== "li") continue;
-            const nested = li.querySelector(":scope > ul, :scope > ol");
+            if (!isItemEl(li)) continue;
+            const nested = li.querySelector(NESTED_LIST);
             const src = nested ? withoutNested(li) : li;
             const text = clean(inline(src));
             if (text) items.push({ text, links: linksIn(src), depth: d });
@@ -204,7 +256,11 @@
           }
         };
         collect(el, depth);
+        // Bir ARIA listesinin maddeleri dogrudan cocuk olmayabilir (arada
+        // sarmalayici div'ler). O durumda hic madde toplanmaz; icerigi kaybetmemek
+        // icin eski davranisa, yani icine inmeye geri donuyoruz.
         if (items.length) blocks.push({ type: "list", ordered: tag === "ol", items, links: linksIn(el) });
+        else walk(el, depth);
 
       } else if (tag === "table") {
         const rows = [...el.querySelectorAll("tr")].map((tr) => [...tr.children].map((td) => clean(inline(td))));
@@ -214,7 +270,10 @@
         const text = el.innerText.trim();
         if (text) blocks.push({ type: "code", text, links: [] });
 
-      } else if (el.children.length) {
+      // Karisik icerik (dogrudan metin + yalnizca satir ici cocuklar) asagidaki
+      // yaprak dalina duser; inline() orada text dugumlerini de topluyor. Blok
+      // seviyesinde cocugu olan sarmalayicilar eskisi gibi recurse edilir.
+      } else if (el.children.length && !(hasOwnText(el) && inlineOnly(el))) {
         walk(el, depth);
 
       } else {

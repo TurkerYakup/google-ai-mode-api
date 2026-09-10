@@ -57,6 +57,50 @@
       <tr><td>Pipedrive</td><td>Aylik ucretli</td></tr>
     </table>
 
+    <!--
+      Google'in cevap govdesinin gercek sekli: sarmalayici <p> YOK, vurgular
+      <strong>/<mark> ile sarili ve cumlenin govdesi ciplak text node olarak
+      aralarinda duruyor. Fixture'in geri kalani duzgun <p> kullandigi icin bu
+      sekil hic test edilmiyordu ve walk() govdeyi sessizce dusuruyordu.
+    -->
+    <h3>Karisik satir ici icerik</h3>
+    <div class="govde">
+      <strong>Freshsales</strong>, tek basina bir arac degil;
+      <mark><strong>2016 yilinda</strong> tanitilan, pazarlama ve satis
+      sureclerini tek panelde toplayan bir <strong>musteri iliskileri
+      platformudur</strong></mark>.
+    </div>
+
+    <!--
+      Google, yerel isletme kartlarini <ul> ile DEGIL div[role="list"] >
+      div[role="listitem"] ile koyuyor (canli sayfadan alinan yapi). walk() eskiden
+      yalnizca gercek <ul>/<ol> etiketini liste saydigi icin bu karuselin icine
+      dalip her yapragi ayri paragraf yapiyordu: "Yol tarifi" / "Web sitesi" ...
+      Kart basina iki gurultu blogu ve dagilmis firma adlari.
+      "Yol tarifi" linkleri google.com'a gider (atif sayilmaz), "Web sitesi"
+      linkleri ise firmanin kendi sitesine -- atiflar oradan geliyor, dolayisiyla
+      kartlari tumden elemek atif kaybettirirdi.
+    -->
+    <h3>Yerel isletme kartlari</h3>
+    <div class="karusel" role="list">
+      <div class="kart" role="listitem">
+        <span>Ornek Otomasyon A.S.</span>
+        <span>Nilufer / Bursa</span>
+        <a href="https://www.google.com/maps/dir//Ornek+Otomasyon"
+           aria-label="Yol tarifi. Yeni sekmede acilir">Yol tarifi</a>
+        <a href="https://ornek-otomasyon.com/"
+           aria-label="Web sitesi. Yeni sekmede acilir">Web sitesi</a>
+      </div>
+      <div class="kart" role="listitem">
+        <span>Ikinci Otomasyon Ltd.</span>
+        <span>Kayapa / Bursa</span>
+        <a href="https://www.google.com/maps/dir//Ikinci+Otomasyon"
+           aria-label="Yol tarifi. Yeni sekmede acilir">Yol tarifi</a>
+        <a href="https://ikinci-otomasyon.com/"
+           aria-label="Web sitesi. Yeni sekmede acilir">Web sitesi</a>
+      </div>
+    </div>
+
     <p>
       Ayrintili degerlendirme icin
       <a href="https://ornek.org/crm-rehberi">ayni kaynaga ikinci link</a> ve

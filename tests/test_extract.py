@@ -165,6 +165,60 @@ class TestSyntheticFixture:
         assert "_Pipedrive_" in md
         assert "`Zoho CRM`" in md
 
+    def test_mixed_inline_content_keeps_sentence_body(self, synthetic):
+        """Regression: vurgular arasindaki ciplak metin dusuyordu.
+
+        Google'in cevap govdesinde sarmalayici <p> yok; cumle <strong>/<mark> ile
+        parcalanmis text node'lardan olusuyor. walk() yalnizca element cocuklari
+        gezdigi icin govde siliniyor, geriye her vurgu ayri bir paragraf olarak
+        kaliyordu -- canli sayfada 157 karakterlik cumleden 36 karakter cikiyordu.
+        """
+        paras = [b["text"] for b in synthetic["blocks"] if b["type"] == "paragraph"]
+        body = next((t for t in paras if "Freshsales" in t), None)
+        assert body is not None, f"karisik icerikli cumle hic cikmadi: {paras}"
+
+        # Vurgular arasindaki govde metni duruyor mu?
+        assert "tek basina bir arac degil" in body
+        assert "tanitilan, pazarlama ve satis" in body
+        assert "sureclerini tek panelde toplayan bir" in body
+
+        # ...ve vurgular ayri paragraflara bolunmemis mi?
+        assert "**2016 yilinda**" in body
+        assert "**musteri iliskileri platformudur**" in body
+        assert not any(t.strip() in {"Freshsales", "2016 yilinda"} for t in paras), (
+            f"vurgular hala ayri paragraf olarak cikiyor: {paras}"
+        )
+
+    def test_aria_list_cards_stay_one_block(self, synthetic):
+        """Regression: div[role=list] karuseli paragraflara dagiliyordu.
+
+        Google yerel isletme kartlarini <ul> ile degil ARIA rolleriyle koyuyor.
+        walk() yalnizca gercek <ul>/<ol>'u liste saydigi icin karuselin icine dalip
+        her yapragi ayri paragraf yapiyordu -- canli sayfada kart basina bir
+        "Yol tarifi" ve bir "Web sitesi" blogu, toplam 20 blogun 10'u gurultu.
+        """
+        lists = [b for b in synthetic["blocks"] if b["type"] == "list"]
+        cards = next((b for b in lists if any("Ornek Otomasyon" in i["text"] for i in b["items"])), None)
+        assert cards is not None, "ARIA listesi tek blok olarak cikmadi"
+        assert len(cards["items"]) == 2, f"kart sayisi yanlis: {cards['items']}"
+
+        # Firma adi kendi kartinda duruyor mu?
+        assert "Ornek Otomasyon" in cards["items"][0]["text"]
+        assert "Ikinci Otomasyon" in cards["items"][1]["text"]
+
+        # Buton metinleri artik serbest paragraf degil.
+        paras = [b["text"] for b in synthetic["blocks"] if b["type"] == "paragraph"]
+        assert "Yol tarifi" not in paras, f"buton metni hala ayri blok: {paras}"
+        assert "Web sitesi" not in paras, f"buton metni hala ayri blok: {paras}"
+
+    def test_aria_list_cards_keep_their_citations(self, synthetic):
+        """Kartlari elemek atif kaybettirirdi: atiflar 'Web sitesi' linkinden geliyor."""
+        domains = [c["domain"] for c in synthetic["citations"]]
+        assert "ornek-otomasyon.com" in domains
+        assert "ikinci-otomasyon.com" in domains
+        # "Yol tarifi" google.com'a gider, atif sayilmamali.
+        assert not any(d and d.endswith("google.com") for d in domains)
+
     def test_google_redirect_is_unwrapped(self, synthetic):
         urls = [c["url"] for c in synthetic["citations"]]
         assert "https://ornek.org/crm-rehberi" in urls
